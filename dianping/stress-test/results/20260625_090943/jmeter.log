@@ -1,0 +1,16 @@
+WARNING: package sun.awt.X11 not in java.desktop
+WARN StatusConsoleListener The use of package scanning to locate plugins is deprecated and will be removed in a future release
+WARN StatusConsoleListener The use of package scanning to locate plugins is deprecated and will be removed in a future release
+WARN StatusConsoleListener The use of package scanning to locate plugins is deprecated and will be removed in a future release
+WARN StatusConsoleListener The use of package scanning to locate plugins is deprecated and will be removed in a future release
+Creating summariser <summary>
+Created the tree successfully using /tmp/seckill_plus_test.jmx
+Starting standalone test @ 2026 Jun 25 09:09:55 CST (1782349795338)
+Waiting for possible Shutdown/StopTestNow/HeapDump/ThreadDump message on port 4445
+summary +    201 in 00:00:06 =   31.1/s Avg:  3351 Min:  3228 Max:  6206 Err:     0 (0.00%) Active: 3799 Started: 4000 Finished: 201
+summary +   2000 in 00:00:30 =   66.4/s Avg: 19173 Min:  6185 Max: 34393 Err:     0 (0.00%) Active: 1795 Started: 4000 Finished: 2205
+summary =   2201 in 00:00:37 =   60.1/s Avg: 17728 Min:  3228 Max: 34393 Err:     0 (0.00%)
+summary +   1799 in 00:00:25 =   72.2/s Avg: 45950 Min: 34387 Max: 57521 Err:     0 (0.00%) Active: 0 Started: 4000 Finished: 4000
+summary =   4000 in 00:01:02 =   65.0/s Avg: 30421 Min:  3228 Max: 57521 Err:     0 (0.00%)
+Tidying up ...    @ 2026 Jun 25 09:10:56 CST (1782349856904)
+... end of run

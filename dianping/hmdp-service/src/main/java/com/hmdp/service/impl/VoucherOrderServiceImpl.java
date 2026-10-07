@@ -1,0 +1,510 @@
+package com.hmdp.service.impl;
+
+import cn.hutool.json.JSONUtil;
+import com.hmdp.shared.SeckillBugFlags;
+import com.hmdp.dto.Result;
+import com.hmdp.dto.SeckillVoucherOrderMessage;
+import com.hmdp.entity.VoucherReconcileLog;
+import com.hmdp.entity.VoucherOrder;
+import com.hmdp.mapper.VoucherReconcileLogMapper;
+import com.hmdp.mapper.VoucherOrderMapper;
+import com.hmdp.service.ISeckillVoucherService;
+import com.hmdp.service.IVoucherOrderService;
+import com.hmdp.service.VoucherOrderCreateResult;
+import com.hmdp.shared.reconciliation.model.ReconcileBusinessType;
+import com.hmdp.shared.reconciliation.model.ReconcileLogType;
+import com.hmdp.shared.reconciliation.model.ReconciliationStatus;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.UserHolder;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.aop.framework.AopContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+
+import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * 优惠券订单服务实现 — 秒杀/普通购买/秒杀Plus的核心编排层。
+ *
+ * <p>秒杀Plus完整流程（seckillVoucherPlus）：
+ * <pre>{@code
+ * 用户请求 seckillVoucherPlus(voucherId)
+ *   │
+ *   ├─ 1. 雪花算法预生成订单ID + traceId
+ *   │
+ *   ├─ 2. 执行 seckill_plus.lua（Redis原子操作）
+ *   │      ├─ 请求去重（同一用户1秒内只允许一个请求）
+ *   │      ├─ 库存检查 → 不足则返回失败
+ *   │      ├─ 一人一单校验 → 重复则返回失败
+ *   │      └─ 扣减库存 + 写入 Redis trace → 返回成功
+ *   │
+ *   ├─ 3. 可靠MQ发送（order-create 消息）
+ *   │      ├─ 成功 → 创建建单校验任务
+ *   │      └─ 失败 → 回滚Redis库存（seckill_plus_rollback.lua）→ 返回错误
+ *   │
+ *   ├─ 4. 发送延时消息（order-timeout，14分钟后触发超时关单）
+ *   │
+ *   └─ 5. 返回 orderId 给用户
+ *
+ *  【异步】SeckillPlusOrderListener 消费 order-create 消息
+ *   │
+ *   ├─ 6. createVoucherOrderPlus() → DB入库 + DB库存扣减 + DEDUCT日志
+ *   │      ├─ 主键冲突 → DUPLICATE（幂等）
+ *   │      ├─ DB库存不足 → OUT_OF_STOCK → 回滚Redis
+ *   │      └─ 成功 → CREATED
+ *   │
+ *   └─ 7. OrderCreateVerifyJob → 校验订单与 DEDUCT 日志是否最终落库
+ *
+ *  【定时】OrderCreateVerifyJob → 重试校验，必要时回滚 Redis 预扣库存
+ * }</pre></p>
+ *
+ * @author 虎哥
+ * @since 2021-12-22
+ */
+@Slf4j
+@Service
+public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+    private static final int ORDER_CREATE_CONFIRM_TIMEOUT_SECONDS = 3;
+
+    @Resource
+    private ISeckillVoucherService seckillVoucherService;
+
+    @Resource
+    private RocketMQTemplate rocketMQTemplate;
+
+    @Resource
+    private RocketMqReliablePublisher rocketMqReliablePublisher;
+
+    @Resource
+    private RedisIdWorker redisIdWorker;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private RedissonClient redissonClient;
+
+    @Autowired(required = false)
+    private VoucherReconcileLogMapper voucherReconcileLogMapper;
+
+    @Autowired(required = false)
+    private OrderCreateVerificationService orderCreateVerificationService;
+
+    /** 原始秒杀Lua脚本（seckill.lua） */
+    private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+    /** 秒杀Plus Lua脚本（seckill_plus.lua）：包含请求去重 + 库存扣减 + 一人一单 + Redis trace */
+    private static final DefaultRedisScript<Long> SECKILL_PLUS_SCRIPT;
+    /** 秒杀Plus回滚Lua脚本（seckill_plus_rollback.lua）：恢复库存 + 移除用户标记 */
+    private static final DefaultRedisScript<Long> SECKILL_PLUS_ROLLBACK_SCRIPT;
+    /** RocketMQ Topic:Tag — 订单创建消息 */
+    private static final String SECKILL_PLUS_ORDER_DESTINATION = "seckill-plus-order-topic:order-create";
+    /** RocketMQ Topic:Tag — 订单超时延时消息 */
+    private static final String SECKILL_PLUS_TIMEOUT_DESTINATION = "seckill-plus-order-topic:order-timeout";
+    /** Redis trace 在 Redis 中的 TTL（2天），过期后不再参与建单校验 */
+    private static final long SECKILL_TRACE_TTL_SECONDS = 2 * 24 * 60 * 60L;
+    /** 死锁埋点用 — 两把静态锁，按userId奇偶决定加锁顺序 */
+    private static final Object BUG_LOCK_A = new Object();
+    private static final Object BUG_LOCK_B = new Object();
+
+    static {
+        SECKILL_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
+        SECKILL_SCRIPT.setResultType(Long.class);
+
+        SECKILL_PLUS_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_PLUS_SCRIPT.setLocation(new ClassPathResource("seckill_plus.lua"));
+        SECKILL_PLUS_SCRIPT.setResultType(Long.class);
+
+        SECKILL_PLUS_ROLLBACK_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_PLUS_ROLLBACK_SCRIPT.setLocation(new ClassPathResource("seckill_plus_rollback.lua"));
+        SECKILL_PLUS_ROLLBACK_SCRIPT.setResultType(Long.class);
+    }
+
+    /**
+     * 原始秒杀下单（同步建单版本，已废弃）。
+     *
+     * <p>流程：Lua扣库存 → 同步调用 createVoucherOrder 写DB。
+     * 相比秒杀Plus版本缺少MQ异步解耦和对账机制。</p>
+     */
+    @Override
+    public Result seckillVoucher(Long voucherId) {
+        Long userId = UserHolder.getUser().getId();
+        long orderId = redisIdWorker.nextId("order");
+        Long result = stringRedisTemplate.execute(
+                SECKILL_SCRIPT,
+                Collections.emptyList(),
+                voucherId.toString(), userId.toString(), String.valueOf(orderId)
+        );
+        int r = 0;
+        if (result != null) {
+            r = result.intValue();
+        }
+        if (r != 0) {
+            return Result.fail(r == 1 ? "库存不足" : "不能重复下单");
+        }
+        VoucherOrder order = new VoucherOrder();
+        order.setId(orderId);
+        order.setUserId(userId);
+        order.setVoucherId(voucherId);
+        proxy = (IVoucherOrderService) AopContext.currentProxy();
+        proxy.createVoucherOrder(order);
+        return Result.ok(orderId);
+    }
+
+    /**
+     * 秒杀Plus下单 — 异步建单版本（推荐），完整的 Redis → MQ → DB → 建单校验 链路。
+     *
+     * <p>与原始秒杀的关键区别：
+     * <ul>
+     *   <li>Redis Lua 脚本增加了请求去重和 trace 记录</li>
+     *   <li>通过 RocketMQ 异步建单，解耦 Redis 扣减和 DB 持久化</li>
+     *   <li>MQ 发送失败时自动回滚 Redis 库存</li>
+     *   <li>发送延时消息用于超时关单</li>
+     *   <li>通过校验任务确认订单与 DEDUCT 日志最终一致</li>
+     * </ul></p>
+     *
+     * @param voucherId 秒杀优惠券ID
+     * @return 秒杀结果，成功返回 orderId
+     */
+    @Override
+    public Result seckillVoucherPlus(Long voucherId) {
+        Long userId = UserHolder.getUser().getId();
+        long orderId = redisIdWorker.nextId("order");
+        String traceId = "trace-" + orderId;
+
+        // 1. 执行Redis Lua脚本，原子完成资格校验 + 库存扣减 + trace记录
+        Long result = stringRedisTemplate.execute(
+                SECKILL_PLUS_SCRIPT,
+                Collections.emptyList(),
+                voucherId.toString(),
+                userId.toString(),
+                String.valueOf(orderId),
+                traceId,
+                String.valueOf(SECKILL_TRACE_TTL_SECONDS),
+                String.valueOf(System.currentTimeMillis())
+        );
+        int r = result == null ? -1 : result.intValue();
+        if (r != 0) {
+            return Result.fail(r == 1 ? "库存不足" : r == 2 ? "不能重复下单" : r == 3 ? "请求过于频繁，请稍后重试" : "秒杀库存未初始化");
+        }
+
+        // ========== 埋点：JVM问题注入（由SeckillBugConfig开关控制） ==========
+        if (SeckillBugFlags.CPU_SPIN.get()) {
+            // 模拟"热点数据预热"中的CPU密集型计算
+            fibonacciWarmup(42);
+        }
+        if (SeckillBugFlags.CPU_REGEX.get()) {
+            // 模拟"用户ID格式校验"中的灾难性回溯正则
+            String suspect = userId.toString() + "1111111111111";
+            SeckillBugFlags.BACKTRACK_PATTERN.matcher(suspect).matches();
+        }
+        if (SeckillBugFlags.DEADLOCK.get()) {
+            // 模拟"跨券库存一致性校验"中锁顺序不一致
+            if (userId % 2 == 0) {
+                synchronized (BUG_LOCK_A) {
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+                    synchronized (BUG_LOCK_B) { /* 券A→券B的库存校验 */ }
+                }
+            } else {
+                synchronized (BUG_LOCK_B) {
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+                    synchronized (BUG_LOCK_A) { /* 券B→券A的库存校验 */ }
+                }
+            }
+        }
+
+        VoucherOrder order = new VoucherOrder();
+        order.setId(orderId);
+        order.setUserId(userId);
+        order.setVoucherId(voucherId);
+        order.setTraceId(traceId);
+
+        try {
+            SeckillVoucherOrderMessage message = buildOrderMessage(order);
+            String payload = JSONUtil.toJsonStr(message);
+
+            // 2. 可靠MQ发送：成功则继续，失败时自动持久化到DB等待重试
+            boolean sent = rocketMqReliablePublisher.publish(
+                    "SECKILL_ORDER_CREATE",
+                    SECKILL_PLUS_ORDER_DESTINATION,
+                    payload
+            );
+            if (!sent) {
+                // MQ发送失败 → 回滚Redis库存，用户可重试
+                rollbackSeckillVoucherPlus(order);
+                return Result.fail("下单人数过多，请重试");
+            }
+
+            // 2. 等待异步建单落地（已注释，压测对比效果）
+             sleepForOrderConfirm();
+             if (orderCreateVerificationService != null && !existsVoucherOrder(orderId)) {
+                orderCreateVerificationService.createPendingTask(orderId, userId, voucherId, traceId);
+             }
+
+            // 3. 发送延时消息（延时级别14≈14分钟），用于超时未支付自动关单
+            rocketMqReliablePublisher.publishDelay(
+                    "SECKILL_ORDER_TIMEOUT",
+                    SECKILL_PLUS_TIMEOUT_DESTINATION,
+                    payload,
+                    14
+            );
+            return Result.ok(orderId);
+        } catch (Exception e) {
+            log.error("send seckill plus order message failed, orderId={}", orderId, e);
+            rollbackSeckillVoucherPlus(order);
+            return Result.fail("下单人数过多，请重试");
+        }
+    }
+
+    /**
+     * 原始秒杀同步建单（已废弃的版本）。
+     *
+     * <p>在一人一单锁保护下，校验重复购买 → DB库存扣减 → 订单入库。
+     * 库存扣减和订单入库在同一事务中，但没有对账追踪。</p>
+     */
+    @Transactional
+    public void createVoucherOrder(VoucherOrder voucherOrder) {
+        Long userId = voucherOrder.getUserId();
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherOrder.getVoucherId()).count();
+        if (count > 0) {
+            log.error("用户已经购买过一次了");
+            return;
+        }
+        boolean success = seckillVoucherService
+                .update()
+                .setSql("stock=stock-1")
+                .eq("voucher_id", voucherOrder.getVoucherId())
+                .gt("stock", 0)
+                .update();
+        if (!success) {
+            log.error("库存不足");
+            return;
+        }
+        save(voucherOrder);
+    }
+
+    /**
+     * 秒杀Plus异步建单 — 由 SeckillPlusOrderListener 消费MQ消息后调用。
+     *
+     * <p>在事务中完成三项操作：
+     * <ol>
+     *   <li>插入订单（主键冲突 → DUPLICATE，幂等处理）</li>
+     *   <li>DB乐观锁扣减库存（库存不足 → 事务回滚，返回 OUT_OF_STOCK）</li>
+     *   <li>写入DEDUCT类型对账日志（记录扣减前后的库存快照）</li>
+     * </ol></p>
+     *
+     * <p>调用方根据返回值决定后续动作：
+     * <ul>
+     *   <li>CREATED → 写入对账追踪，等待旁路校验</li>
+     *   <li>DUPLICATE → 幂等忽略（消息重复消费）</li>
+     *   <li>OUT_OF_STOCK → 回滚Redis库存，留给对账引擎兜底</li>
+     * </ul></p>
+     *
+     * @param message MQ消息体
+     * @return 创建结果
+     */
+    @Override
+    @Transactional
+    public VoucherOrderCreateResult createVoucherOrderPlus(SeckillVoucherOrderMessage message) {
+        VoucherOrder voucherOrder = new VoucherOrder()
+                .setId(message.getOrderId())
+                .setUserId(message.getUserId())
+                .setVoucherId(message.getVoucherId())
+                .setTraceId(message.getTraceId());
+
+        // 1. 先插入订单 — 主键冲突说明是重复消息，幂等忽略
+        try {
+            save(voucherOrder);
+        } catch (DuplicateKeyException e) {
+            log.info("duplicate voucher order ignored, orderId={}, userId={}, voucherId={}",
+                    voucherOrder.getId(), voucherOrder.getUserId(), voucherOrder.getVoucherId());
+            return VoucherOrderCreateResult.DUPLICATE;
+        }
+
+        // 2. DB乐观锁扣库存 — gt("stock", 0) 防止超卖
+        Integer beforeQty = loadDbStock(voucherOrder.getVoucherId());
+        boolean success = seckillVoucherService
+                .update()
+                .setSql("stock=stock-1")
+                .eq("voucher_id", voucherOrder.getVoucherId())
+                .gt("stock", 0)
+                .update();
+        if (!success) {
+            // DB库存不足 → 标记事务回滚（订单插入也会回滚）
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            log.error("db stock not enough when creating seckill plus order, orderId={}", voucherOrder.getId());
+            return VoucherOrderCreateResult.OUT_OF_STOCK;
+        }
+
+        // 3. 写入DEDUCT对账日志 — 记录DB层的库存变更快照
+        saveDeductReconcileLog(message, voucherOrder, beforeQty);
+
+        // ========== 埋点：JVM问题注入（由SeckillBugConfig开关控制） ==========
+        if (SeckillBugFlags.MEMORY_LEAK.get()) {
+            // 模拟"订单本地缓存加速"，但无淘汰策略
+            SeckillBugFlags.LEAK_CACHE.put(voucherOrder.getId(), voucherOrder);
+        }
+        if (SeckillBugFlags.GC_ALLOC.get()) {
+            // 模拟"生成订单报表"中的大对象分配
+            byte[] reportBuffer = new byte[5 * 1024 * 1024]; // 5MB
+            for (int i = 0; i < reportBuffer.length; i += 4096) {
+                reportBuffer[i] = (byte) (i % 256);
+            }
+        }
+
+        return VoucherOrderCreateResult.CREATED;
+    }
+
+    /**
+     * 回滚秒杀Plus订单 — 恢复Redis中已扣减的库存。
+     *
+     * <p>触发场景：
+     * <ul>
+     *   <li>MQ消息发送失败</li>
+     *   <li>DB库存不足（OUT_OF_STOCK）</li>
+     *   <li>其他需要回退Redis库存的异常</li>
+     * </ul></p>
+     *
+     * <p>执行 seckill_plus_rollback.lua 恢复库存并在Redis中记录RESTORE日志，
+     * 同时在DB中写入RESTORE对账日志。</p>
+     */
+    @Override
+    public void rollbackSeckillVoucherPlus(VoucherOrder voucherOrder) {
+        executeGovernanceRollback(voucherOrder);
+        saveRestoreReconcileLog(voucherOrder, ReconcileBusinessType.FAIL, "rollback triggered");
+    }
+
+    /**
+     * 判断订单是否已存在（用于超时关单前的校验）。
+     */
+    @Override
+    public boolean existsVoucherOrder(Long orderId) {
+        return getBaseMapper().selectById(orderId) != null;
+    }
+
+    /** 递归斐波那契 — CPU密集型，用于模拟"热点数据预热" */
+    private static long fibonacciWarmup(int n) {
+        if (n <= 1) return n;
+        return fibonacciWarmup(n - 1) + fibonacciWarmup(n - 2);
+    }
+
+    void sleepForOrderConfirm() {
+        try {
+            TimeUnit.SECONDS.sleep(ORDER_CREATE_CONFIRM_TIMEOUT_SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** 构建MQ消息体 */
+    private SeckillVoucherOrderMessage buildOrderMessage(VoucherOrder order) {
+        SeckillVoucherOrderMessage message = new SeckillVoucherOrderMessage();
+        message.setOrderId(order.getId());
+        message.setUserId(order.getUserId());
+        message.setVoucherId(order.getVoucherId());
+        message.setTraceId(order.getTraceId());
+        return message;
+    }
+
+    /**
+     * 执行Redis回滚 — 调用 seckill_plus_rollback.lua 恢复库存。
+     *
+     * <p>Lua脚本内部有幂等保护：如果该traceId已经RESTORE过，不会重复回滚。</p>
+     */
+    private void executeGovernanceRollback(VoucherOrder voucherOrder) {
+        stringRedisTemplate.execute(
+                SECKILL_PLUS_ROLLBACK_SCRIPT,
+                Collections.emptyList(),
+                voucherOrder.getVoucherId().toString(),
+                voucherOrder.getUserId().toString(),
+                String.valueOf(voucherOrder.getId()),
+                voucherOrder.getTraceId() == null ? "trace-" + voucherOrder.getId() : voucherOrder.getTraceId(),
+                String.valueOf(SECKILL_TRACE_TTL_SECONDS),
+                String.valueOf(System.currentTimeMillis())
+        );
+    }
+
+    /** 读取DB当前库存（用于对账日志记录 beforeQty） */
+    private Integer loadDbStock(Long voucherId) {
+        com.hmdp.entity.SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
+        return voucher == null ? null : voucher.getStock();
+    }
+
+    /** 写入DEDUCT类型对账日志 — 记录DB库存扣减快照 */
+    private void saveDeductReconcileLog(SeckillVoucherOrderMessage message, VoucherOrder order, Integer beforeQty) {
+        if (voucherReconcileLogMapper == null) {
+            return;
+        }
+        int afterQty = beforeQty == null ? -1 : beforeQty - 1;
+        VoucherReconcileLog log = new VoucherReconcileLog()
+                .setOrderId(order.getId())
+                .setUserId(order.getUserId())
+                .setVoucherId(order.getVoucherId())
+                .setTraceId(message.getTraceId())
+                .setBeforeQty(beforeQty)
+                .setChangeQty(1)
+                .setAfterQty(afterQty)
+                .setLogType(ReconcileLogType.DEDUCT)
+                .setBusinessType(ReconcileBusinessType.SUCCESS)
+                .setReconciliationStatus(ReconciliationStatus.PENDING)
+                .setDetail("db order created and stock deducted");
+        voucherReconcileLogMapper.insert(log);
+    }
+
+    /** 写入RESTORE类型对账日志 — 记录库存回补 */
+    private void saveRestoreReconcileLog(VoucherOrder order, ReconcileBusinessType businessType, String detail) {
+        if (voucherReconcileLogMapper == null) {
+            return;
+        }
+        VoucherReconcileLog log = new VoucherReconcileLog()
+                .setOrderId(order.getId())
+                .setUserId(order.getUserId())
+                .setVoucherId(order.getVoucherId())
+                .setTraceId(order.getTraceId() == null ? "trace-" + order.getId() : order.getTraceId())
+                .setChangeQty(1)
+                .setLogType(ReconcileLogType.RESTORE)
+                .setBusinessType(businessType)
+                .setReconciliationStatus(ReconciliationStatus.PENDING)
+                .setDetail(detail);
+        voucherReconcileLogMapper.insert(log);
+    }
+
+    /**
+     * 处理优惠券订单（Redisson分布式锁版本，原始秒杀用）。
+     *
+     * <p>通过分布式锁保证同一用户不会并发创建订单，
+     * 锁内通过Spring AOP代理调用 @Transactional 方法。</p>
+     */
+    public void handleVoucherOrder(VoucherOrder voucherOrder) {
+        Long userId = voucherOrder.getUserId();
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
+        boolean isLock = lock.tryLock();
+        if (!isLock) {
+            log.error("不允许重复下单");
+            return;
+        }
+        try {
+            proxy.createVoucherOrder(voucherOrder);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private IVoucherOrderService proxy;
+}

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql:*)",
+      "Bash(mysqldump:*)",
+      "Bash(grep:*)",
+      "Bash(mvn -q install -DskipTests -T 4)",
+      "Bash(mvn -pl hmdp-start spring-boot:run -q)"
+    ]
+  }
+}

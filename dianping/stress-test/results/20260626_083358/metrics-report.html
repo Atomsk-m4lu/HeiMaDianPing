@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>压测指标报告 - 2026-06-26 08:34:09</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 24px; }
+h1 { text-align: center; margin-bottom: 8px; font-size: 24px; }
+.subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.card { background: #16213e; border-radius: 12px; padding: 20px; border: 1px solid #0f3460; }
+.card-title { font-size: 14px; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.card-values div { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.card-values div:last-child { border-bottom: none; }
+.card-label { font-size: 13px; color: #666; }
+.card-value { font-size: 20px; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; }
+.footer { text-align: center; margin-top: 32px; color: #555; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>黑马点评 - 压测指标报告</h1>
+<div class="subtitle">
+    时间范围: 2026-06-26 08:34:09 ~ 08:34:15
+    &nbsp;|&nbsp; 数据来源: Prometheus (1s 粒度)
+</div>
+<div class="grid">
+
+        <div class="card">
+            <div class="card-title">CPU 使用率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">53.4%</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">29.3%</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">0.2%</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">系统负载</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">4.84</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">4.23</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">2.39</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">JVM 堆使用率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">4.5%</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">3.1%</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">1.6%</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">系统内存使用率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#e74c3c">99.5%</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#e74c3c">99.4%</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">99.2%</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">磁盘使用率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#f39c12">84.8%</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#f39c12">84.8%</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">84.8%</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">磁盘 IO 等待</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">5.7%</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">5.5%</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">5.3%</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">Young GC 频率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">34.58</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">23.39</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">13.22</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">Young GC 耗时</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">1.2 ms</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">0.8 ms</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">0.3 ms</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">Full GC 频率</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#999">N/A</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#999">N/A</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">N/A</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">Full GC 耗时</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#999">N/A</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#999">N/A</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">N/A</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">RT (ms)</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">26.0 ms</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">26.0 ms</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">26.0 ms</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">QPS</div>
+            <div class="card-values">
+                <div><span class="card-label">最大</span><span class="card-value" style="color:#27ae60">666.5 /s</span></div>
+                <div><span class="card-label">平均</span><span class="card-value" style="color:#27ae60">666.5 /s</span></div>
+                <div><span class="card-label">最小</span><span class="card-value">666.5 /s</span></div>
+            </div>
+        </div>
+</div>
+<div class="footer">Generated at 2026-06-26 08:34:15 CST</div>
+</body>
+</html>

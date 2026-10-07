@@ -1,0 +1,82 @@
+server:
+  port: 8081
+  tomcat:
+    threads:
+      max: 800
+      min-spare: 100
+    accept-count: 500
+
+dewu:
+  compensation:
+    retry:
+      max-retry-count: 3
+
+spring:
+  main:
+    allow-circular-references: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+#      - org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration
+  application:
+    name: hmdp
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:dingping}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD}
+    database: ${REDIS_DATABASE:1}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 30
+        max-idle: 15
+        min-idle: 5
+        max-wait: -1ms
+        time-between-eviction-runs: 10s
+  jackson:
+    default-property-inclusion: non_null
+
+rocketmq:
+  name-server: ${ROCKETMQ_NAMESRV:127.0.0.1:9876}
+  producer:
+    group: seckill-plus-tx-producer-group
+  consumer:
+    pull-batch-size: 32
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.hmdp.entity,com.hmdp.shopdetail.infrastructure.persistence.dataobject,com.hmdp.shared.infrastructure.persistence.dataobject
+  type-enums-package: com.hmdp.orderverify.model;com.hmdp.shared.reconciliation.model;com.hmdp.shared.domain.compensation.model
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      base-path: /actuator
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.hmdp: debug
+
+seckill:
+  reconcile:
+    enabled: true
+    auto-compensation-enabled: false
+    scan-batch-size: 100
+    scan-delay-minutes: 3
+    compensation-max-retry-count: 5
+    compensation-retry-delay-seconds: 30
