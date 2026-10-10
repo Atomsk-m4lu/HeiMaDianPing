@@ -51,6 +51,21 @@ public class ShopDetailApplicationService {
     @Autowired(required = false)
     private FlashPayStateMachineFacade flashPayStateMachineFacade;
 
+    /**
+     * 构造函数注入两个必选依赖
+     * <p>
+     * 为什么这两个走构造函数注入（强依赖），而 taskChainEngine / flashPayStateMachineFacade 走字段注入（可选）：
+     * <ul>
+     *   <li>domainService — 所有商详查询/申诉操作最终都要落到领域服务，引擎未装配时的降级路径也必须用它，业务刚需。</li>
+     *   <li>shopRatingRefreshService — 商详返回后要异步触发评分刷新，没有它商详接口仍可用但评分永远不更新，影响数据新鲜度。</li>
+     *   <li>taskChainEngine / flashPayStateMachineFacade — 共享引擎模块未装配时这两个 Bean 不存在（Spring 启动会跳过，不会报错），
+     *       所以用 @Autowired(required = false)，代码里先判 null 再调用，避免 NPE。</li>
+     * </ul>
+     * </p>
+     *
+     * @param domainService 领域服务，负责聚合查询/申诉持久化/衍生数据生成等核心业务规则
+     * @param shopRatingRefreshService 评分刷新服务，商详查询完成后异步触发店铺热度评分刷新
+     */
     public ShopDetailApplicationService(ShopDetailDomainService domainService,
                                         ShopRatingRefreshService shopRatingRefreshService) {
         this.domainService = domainService;
