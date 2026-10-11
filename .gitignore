@@ -5,3 +5,14 @@ target/
 *.class
 *.log
 .DS_Store
+
+# ---- personal study notes (private, do not publish) ----
+导学-黑马点评.md
+读懂指南-黑马点评.md
+名词详解-黑马点评.md
+面经-黑马点评.md
+
+# ---- local artifacts ----
+nohup.out
+arthas-output/
+stress-test/results/
