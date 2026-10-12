@@ -22,8 +22,8 @@ import java.util.List;
  *
  * <p>两种工厂方法：
  * <ul>
- *   <li>{@link #create(...)} — 创建全新任务，runtimeStatus=PENDING，createdAt=now</li>
- *   <li>{@link #restore(...)} — 从持久层恢复已有任务，保留原始的createdAt和retryCount</li>
+ *   <li>{@link #create(String, String, String, String, String) create(...)} — 创建全新任务，runtimeStatus=PENDING，createdAt=now</li>
+ *   <li>{@link #restore(String, String, String, String, String, StateTaskStatus, String, int, LocalDateTime, LocalDateTime) restore(...)} — 从持久层恢复已有任务，保留原始的createdAt和retryCount</li>
  * </ul></p>
  */
 @Getter

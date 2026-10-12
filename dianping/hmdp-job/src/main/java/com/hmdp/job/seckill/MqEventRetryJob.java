@@ -29,15 +29,31 @@ import java.util.List;
 @Slf4j
 public class MqEventRetryJob {
 
+    /** 查询 / 更新 MQ 事件记录表 —— 扫描待重试消息、回写发送结果 */
     @Resource
     private MqEventRecordMapper mqEventRecordMapper;
 
+    /** 可靠消息发布器 —— 将待重试记录重新发送到 RocketMQ */
     @Resource
     private RocketMqReliablePublisher rocketMqReliablePublisher;
 
-    /** 每30秒执行一次MQ事件重试 */
+    /**
+     * 扫描并重试 MQ 发送失败的事件
+     * <p>
+     * cron = "0/30 * * * * ?" 含义：从第 0 秒开始，每 30 秒触发一次（每分钟的 :00 和 :30）。
+     * 单轮最多处理 20 条，避免某轮积压太多消息导致 MQ 压力骤增。
+     * </p>
+     * <p>
+     * 处理逻辑（每条记录独立 try-catch，互不影响）：
+     * <pre>{@code
+     * 发送成功 → event_status=SENT，不再重试
+     * 发送失败 → retryCount+1，next_retry_time 推迟 30 秒，等待下轮
+     * 抛异常   → 打 WARN 日志后跳过，防止一条坏消息阻断整个 Job
+     * }</pre></p>
+     */
     @Scheduled(cron = "0/30 * * * * ?")
     public void run() {
+        // 防御性空值检查 —— 某些启动阶段 Bean 可能尚未注入完成
         if (mqEventRecordMapper == null || rocketMqReliablePublisher == null) {
             return;
         }
@@ -54,18 +70,19 @@ public class MqEventRetryJob {
                         record.getPayload()
                 );
                 if (success) {
-                    // 重试发送成功 → 标记为已发送
+                    // 重试发送成功 → 标记为已发送，不再被后续 Job 扫描到
                     record.setEventStatus("SENT");
                     record.setUpdateTime(LocalDateTime.now());
                     mqEventRecordMapper.updateById(record);
                     continue;
                 }
-                // 再次失败 → 增加重试计数，推迟下次重试时间
+                // 再次失败 → 增加重试计数，推迟到 30 秒后再试
                 record.setRetryCount(record.getRetryCount() == null ? 1 : record.getRetryCount() + 1);
                 record.setNextRetryTime(LocalDateTime.now().plusSeconds(30));
                 record.setUpdateTime(LocalDateTime.now());
                 mqEventRecordMapper.updateById(record);
             } catch (Exception e) {
+                // 单条异常不影响其他记录，只打 WARN 等待下轮重试
                 log.warn("mq event retry failed, id={}", record.getId(), e);
             }
         }

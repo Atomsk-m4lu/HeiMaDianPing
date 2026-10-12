@@ -25,11 +25,29 @@ import java.time.LocalDateTime;
  */
 public class StateEngine {
 
+    /** 状态机注册表，运行时根据 task.machineCode 查找对应的 StateMachineDefinition */
     private final StateMachineRegistry registry;
+    /** 任务持久化仓库，负责 save（start时）/ update（每次节点执行后）/ findByTaskId（resume时） */
     private final StateTaskRepository taskRepository;
+    /** 流转日志持久化仓库，每次 StateNode.execute() 执行后追加一条 StateTransitionLog */
     private final StateTransitionLogRepository logRepository;
+    /** 重试策略，失败路径中通过 canRetry(task) 判断是否还能重试（与 FailurePolicy 联合决策） */
     private final RetryPolicy retryPolicy;
 
+    /**
+     * 构造函数注入四个必选依赖。
+     * <p>StateEngine 是与业务无关的通用引擎，所有依赖通过构造函数传入以便测试和灵活组装：
+     * <ul>
+     *   <li>registry — 注册了所有 StateMachineDefinition，引擎运行时查表驱动</li>
+     *   <li>taskRepository / logRepository — SPI 扩展点，生产环境可换 DB 实现，测试用 InMemory</li>
+     *   <li>retryPolicy — 控制最大重试次数，FailurePolicy 控制"是否建议重试"，二者联合决策</li>
+     * </ul></p>
+     *
+     * @param registry       状态机注册表，启动时需先注册所有 StateMachineDefinition
+     * @param taskRepository 任务持久化仓库，CBB 默认提供 InMemoryStateTaskRepository
+     * @param logRepository  流转日志持久化仓库，CBB 默认提供 InMemoryStateTransitionLogRepository
+     * @param retryPolicy    重试次数策略，构造时指定 maxRetryCount，如 {@code new RetryPolicy(3)}
+     */
     public StateEngine(StateMachineRegistry registry,
                        StateTaskRepository taskRepository,
                        StateTransitionLogRepository logRepository,
