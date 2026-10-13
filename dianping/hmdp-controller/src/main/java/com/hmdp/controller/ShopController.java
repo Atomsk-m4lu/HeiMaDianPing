@@ -53,6 +53,16 @@ public class ShopController {
         return Result.ok(shop.getId());
     }
 
+    /**
+     * 提交商铺评价
+     * <p>
+     * 对指定商铺发表用户评价，需登录后操作。校验商铺 ID 和总体评分等必填字段，
+     * 校验通过后委托给 {@link IShopService#createShopReview(Long, CreateShopReviewRequest)} 完成入库。
+     * </p>
+     *
+     * @param request 评价请求体，包含商铺 ID、评分、评价内容等
+     * @return 评价结果
+     */
     @PostMapping("/review")
     public Result createShopReview(@RequestBody CreateShopReviewRequest request) {
         UserDTO user = UserHolder.getUser();

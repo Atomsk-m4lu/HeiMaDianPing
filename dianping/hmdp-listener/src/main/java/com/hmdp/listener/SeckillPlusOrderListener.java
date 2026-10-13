@@ -98,20 +98,37 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
         processMessage(orderMessage, body, msg.getReconsumeTimes());
     }
 
+    /**
+     * 秒杀下单消息核心处理 —— 消费端真正干活的地方。
+     *
+     * <p>被上层 {@link #processMessage(MessageExt)} 解码后调用，职责是：
+     * ① 先跑故障注入埋点（线上才开，压测模拟 JVM 问题）；
+     * ② 调 Service 层建订单；
+     * ③ 根据建单结果分流处理：库存不足 → 回滚 Redis / 重复消息 → 幂等跳过 / 异常 → 交给 MQ 或恢复任务。</p>
+     *
+     * <p>异常处理策略：MQ 重试次数未超上限 → 重新抛出触发 RocketMQ RETRY；
+     * 超上限后静默吞掉异常、写 recovery_task 表，让 RecoveryJob 定时兜底补单，
+     * 避免 Broker 整批重试引发雪崩。</p>
+     *
+     * @param orderMessage   反序列化后的秒杀下单消息（含 orderId/userId/voucherId/traceId）
+     * @param sourceMessage  原始 JSON 字符串（写入 recovery_task 表用，保留完整原文方便排查）
+     * @param reconsumeTimes 当前消息的 MQ 重试次数（RocketMQ 内部计数器）
+     */
     private void processMessage(SeckillVoucherOrderMessage orderMessage, String sourceMessage, int reconsumeTimes) {
+        // 把消息里的四个字段拷进 VoucherOrder 实体 —— 后面 Service 调用和日志都用这个对象
         VoucherOrder order = new VoucherOrder()
                 .setId(orderMessage.getOrderId())
                 .setUserId(orderMessage.getUserId())
                 .setVoucherId(orderMessage.getVoucherId())
                 .setTraceId(orderMessage.getTraceId());
 
-        // ========== 埋点：JVM问题注入（由SeckillBugConfig开关控制） ==========
+        // ========== 故障注入埋点（线上通过 SeckillBugConfig 动态开关） ==========
+        // 线程本地泄漏：模拟消息解析时把大 buffer 塞进 ThreadLocal 没清 → 堆内存持续膨胀 → OOM
         if (SeckillBugFlags.THREADLOCAL_LEAK.get()) {
-            // 模拟"消息解析buffer"，分配后未清理
-            SeckillBugFlags.LEAK_THREADLOCAL.set(new byte[3 * 1024 * 1024]); // 3MB
+            SeckillBugFlags.LEAK_THREADLOCAL.set(new byte[3 * 1024 * 1024]);
         }
+        // 线程爆炸：模拟每条消息起独立 newCachedThreadPool + 60s 长任务 → 线程数飙升 → CPU 飙满
         if (SeckillBugFlags.THREAD_EXPLOSION.get()) {
-            // 模拟"旁路审计日志"，每条消息起独立线程
             java.util.concurrent.ExecutorService auditPool =
                     java.util.concurrent.Executors.newCachedThreadPool();
             auditPool.submit(() -> {
@@ -119,15 +136,21 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
             });
         }
 
+        // ========== 核心建单：调 Service 层的 createVoucherOrderPlus ==========
         VoucherOrderCreateResult result;
         try {
             result = voucherOrderService.createVoucherOrderPlus(orderMessage);
         } catch (Exception e) {
+            // 异常分两种情况处理：
             if (reconsumeTimes < MQ_MAX_RECONSUME_TIMES) {
+                // ① 重试次数还没到上限 → 重新抛出去，让上层 CompletableFuture 线程
+                //    的异常传到 RocketMQ，Broker 会按延迟级别重新投递（10s/30s/1min...）
                 log.warn("createVoucherOrderPlus failed, request MQ retry, orderId={}, reconsumeTimes={}",
                         order.getId(), reconsumeTimes, e);
                 throw e;
             }
+            // ② 重试耗尽 → 不再抛（避免 Broker 把整批消息都重投），
+            //    而是在本地写 recovery_task 表，让 OrderCreateRecoveryJob 定时扫出来补单
             log.error("createVoucherOrderPlus failed after MQ retries, create recovery task, orderId={}, reconsumeTimes={}",
                     order.getId(), reconsumeTimes, e);
             if (orderCreateRecoveryService != null) {
@@ -136,48 +159,83 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
             return;
         }
 
+        // ========== 建单结果分发 ==========
+
+        // 分支 1：DB 扣库存失败（Redis 够但 DB 不够，极端并发下才会出现的库存不一致）
+        // → 必须把 Redis 里扣掉的库存 + 一人一单标记 + DEDUCT 日志回滚掉
+        //   否则 Redis 库存会被"幽灵单"永久占着，真实用户买不到
         if (result == VoucherOrderCreateResult.OUT_OF_STOCK) {
-            // DB库存不足 → 回滚Redis库存，把机会让给其他用户
             voucherOrderService.rollbackSeckillVoucherPlus(order);
             log.warn("seckill plus order out of stock, rolled back, orderId={}", order.getId());
             return;
         }
+        // 分支 2：rollbackSeckillVoucherPlus 自己也失败了（比如 Lua 脚本执行异常）
+        // → 彻底失去自动回滚能力，留给 SeckillReconcileScanJob 对账引擎兜底
+        //   对账引擎扫 Redis DEDUCT 日志 vs DB 订单表，发现"有扣减日志但没订单"就自动补偿
         if (result == VoucherOrderCreateResult.ROLLBACK_FAILED) {
-            // 回滚失败 → 对账引擎兜底
             log.error("seckill plus rollback failed, left to reconciliation, orderId={}", order.getId());
             return;
         }
+        // 分支 3：返回 DUPLICATE —— 说明同一个 orderId 的消息已经被消费过了
+        // （可能是 RocketMQ 重投、也可能是上游发了重复消息）
+        // 直接幂等忽略，不报错、不重试，保证消费端安全
         if (result == VoucherOrderCreateResult.DUPLICATE) {
-            // 重复消息，幂等忽略
             log.info("duplicate seckill plus order message ignored, orderId={}", order.getId());
             return;
         }
+        // 正路径：建单成功，打完日志就完了
         log.info("seckill plus order created, orderId={}", order.getId());
     }
 
     /**
-     * 配置批量消费 — 覆盖默认的单条消费行为。
+     * 配置批量并发消费 —— RocketMQ 消费者启动扩展钩子。
+     * <p>
+     * 覆盖默认行为（单条串行消费），改写为：
+     * <ol>
+     *   <li><b>批量拉取</b>：每次向 Broker 拉取最多 32 条消息，减少网络交互</li>
+     *   <li><b>并发处理</b>：32 条消息丢进自建线程池并行执行 {@link #processMessage}()</li>
+     *   <li><b>全部完成才 ACK</b>：用 CompletableFuture 等待所有任务结束，
+     *       再返回 {@link ConsumeConcurrentlyStatus#CONSUME_SUCCESS} 批量确认，
+     *       保证 Broker 认为"已消费"时所有消息真的处理完毕，不会丢</li>
+     * </ol>
+     * 线程池拒绝策略为 {@link ThreadPoolExecutor.CallerRunsPolicy}，
+     * 线程池满时让消费者线程自己跑任务，形成反压，防止秒杀洪峰打爆下游。
      *
-     * <p>每次拉取最多32条消息，通过线程池并发处理，
-     * 使用 CompletableFuture.allOf 等待所有任务完成后才返回 CONSUME_SUCCESS，
-     * 保证 batch ACK 前所有消息都已处理完成。</p>
+     * <p>单条消息处理失败只打日志，不返回 RECONSUME_LATER 让 RocketMQ 重试整批，
+     * 而是交给对账引擎（ReconcileScan）兜底补单，避免雪崩式重试。</p>
+     *
+     * @param consumer RocketMQ Push 消费者实例（连接 Broker 之前调用）
      */
     @Override
     public void prepareStart(DefaultMQPushConsumer consumer) {
+        // ① 设置批量拉取上限：默认 1，改成 32，一次和 Broker 交互拿更多消息
         consumer.setConsumeMessageBatchMaxSize(32);
+
+        // ② 替换默认的串行监听器为"并发批量监听器"
         consumer.setMessageListener((MessageListenerConcurrently) (msgs, context) -> {
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>(msgs.size());
+
+            // 逐条包装成异步任务，丢进自建线程池并发执行
             for (MessageExt msg : msgs) {
+                // body 解码（StandardCharsets.UTF_8 防止乱码）
                 String body = new String(msg.getBody(), StandardCharsets.UTF_8);
+                // runAsync：无返回值的异步任务，executor 是 CallerRunsPolicy 线程池
                 futures.add(CompletableFuture.runAsync(() -> processMessage(msg), executor));
             }
+
+            // ③ 阻塞等待所有任务完成 —— 关键设计！
+            // 必须等全部 Future.get() 返回后才 ACK，否则 Broker 以为消费成功但实际还在跑，
+            // JVM 此时挂掉就会丢消息。这里不关心单个任务结果，成功失败都继续等下一个。
             for (CompletableFuture<Void> future : futures) {
                 try {
                     future.get();
                 } catch (Exception e) {
+                    // 单条失败只记日志，让对账引擎兜底，不触发 RocketMQ 整批重试
                     log.error("batch process message unexpected error, left to reconciliation", e);
                 }
             }
+
+            // ④ 全部处理完才告诉 RocketMQ：这批我消费成功了
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
     }

@@ -78,29 +78,38 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+    /** 等待异步建单落地的超时时间（秒），用于压测对比时阻塞确认 */
     private static final int ORDER_CREATE_CONFIRM_TIMEOUT_SECONDS = 3;
 
+    /** 秒杀优惠券服务（DB 库存扣减） */
     @Resource
     private ISeckillVoucherService seckillVoucherService;
 
+    /** RocketMQ 原生模板（原始 MQ 操作） */
     @Resource
     private RocketMQTemplate rocketMQTemplate;
 
+    /** 可靠 MQ 发布器（封装了消息发送失败时的本地消息表持久化与重试） */
     @Resource
     private RocketMqReliablePublisher rocketMqReliablePublisher;
 
+    /** 雪花算法 ID 生成器（生成订单 ID） */
     @Resource
     private RedisIdWorker redisIdWorker;
 
+    /** Redis 字符串模板（执行 Lua 脚本、操作 Redis 缓存） */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /** Redisson 客户端（原始秒杀用分布式锁保护一人一单） */
     @Resource
     private RedissonClient redissonClient;
 
+    /** 对账日志 Mapper（对账模块未启用时为 null，不影响主流程） */
     @Autowired(required = false)
     private VoucherReconcileLogMapper voucherReconcileLogMapper;
 
+    /** 订单创建校验服务（对账兜底模块未启用时为 null，不影响主流程） */
     @Autowired(required = false)
     private OrderCreateVerificationService orderCreateVerificationService;
 
@@ -116,10 +125,25 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private static final String SECKILL_PLUS_TIMEOUT_DESTINATION = "seckill-plus-order-topic:order-timeout";
     /** Redis trace 在 Redis 中的 TTL（2天），过期后不再参与建单校验 */
     private static final long SECKILL_TRACE_TTL_SECONDS = 2 * 24 * 60 * 60L;
-    /** 死锁埋点用 — 两把静态锁，按userId奇偶决定加锁顺序 */
+    /**
+     * 死锁埋点用 — 两把静态锁，按 userId 奇偶决定加锁顺序，故意制造锁顺序不一致以触发死锁。
+     * 由 {@link com.hmdp.shared.SeckillBugFlags#DEADLOCK} 开关控制是否启用。
+     */
     private static final Object BUG_LOCK_A = new Object();
     private static final Object BUG_LOCK_B = new Object();
 
+    /**
+     * 类加载时初始化三个 Redis Lua 脚本
+     * <p>
+     * Lua 脚本在 Redis 中是原子执行的，适合秒杀场景中需要"多步操作要么全成功要么全失败"的场景：
+     * <ul>
+     *   <li>{@code seckill.lua} — 原始秒杀：一人一单校验 + 库存扣减</li>
+     *   <li>{@code seckill_plus.lua} — 秒杀Plus：请求去重 + 一人一单 + 库存扣减 + trace 记录（含幂等保护）</li>
+     *   <li>{@code seckill_plus_rollback.lua} — 秒杀Plus 回滚：恢复库存 + 移除用户标记（含幂等保护）</li>
+     * </ul>
+     * 脚本放在 {@code resources/} 目录下，通过 {@link ClassPathResource} 加载，返回值统一为 {@link Long}。
+     * </p>
+     */
     static {
         SECKILL_SCRIPT = new DefaultRedisScript<>();
         SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
@@ -250,7 +274,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             }
 
             // 2. 等待异步建单落地（已注释，压测对比效果）
-             sleepForOrderConfirm();
+//             sleepForOrderConfirm();
              if (orderCreateVerificationService != null && !existsVoucherOrder(orderId)) {
                 orderCreateVerificationService.createPendingTask(orderId, userId, voucherId, traceId);
              }

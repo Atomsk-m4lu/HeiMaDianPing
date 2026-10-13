@@ -45,6 +45,9 @@ rocketmq:
   name-server: ${ROCKETMQ_NAMESRV:127.0.0.1:9876}
   producer:
     group: seckill-plus-tx-producer-group
+    # 默认 3000ms 在 4000 并发下会让大量 syncSend 超时（客户端日志可见
+    # "send request failed to <broker>:10911"），消息发不进 broker 就只有一半能落库。
+    send-message-timeout: 10000
   consumer:
     pull-batch-size: 32
 

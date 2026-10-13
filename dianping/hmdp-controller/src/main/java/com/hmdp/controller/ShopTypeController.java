@@ -12,8 +12,9 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
+ * 商铺类型控制器
  * <p>
- * 前端控制器
+ * 提供商铺分类相关的 HTTP 接口，主要用于首页商铺分类列表展示。
  * </p>
  *
  * @author 虎哥
@@ -22,14 +23,22 @@ import java.util.List;
 @RestController
 @RequestMapping("/shop-type")
 public class ShopTypeController {
+
+    /** 商铺类型服务 */
     @Resource
     private IShopTypeService typeService;
 
+    /**
+     * 查询商铺类型列表
+     * <p>
+     * 按 sort 字段升序返回所有商铺分类，供首页展示使用。
+     * 实现上优先从 Redis 缓存读取，缓存未命中再查数据库并回写缓存，提升首页访问性能。
+     * </p>
+     *
+     * @return 商铺类型列表
+     */
     @GetMapping("list")
     public Result queryTypeList() {
-//        List<ShopType> typeList = typeService
-//                .query().orderByAsc("sort").list();
-
         return typeService.querySort();
     }
 }

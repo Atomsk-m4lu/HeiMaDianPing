@@ -21,8 +21,9 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 
 /**
+ * 用户控制器
  * <p>
- * 前端控制器
+ * 提供用户相关的 HTTP 接口，包括发送验证码、登录/登出、查询用户信息、签到等功能。
  * </p>
  *
  * @author 虎哥
@@ -33,17 +34,27 @@ import javax.servlet.http.HttpSession;
 @RequestMapping("/user")
 public class UserController {
 
+    /** 用户服务 */
     @Resource
     private IUserService userService;
 
+    /** 用户详情服务 */
     @Resource
     private IUserInfoService userInfoService;
 
+    /** Redis 模板 */
     @Autowired
     private StringRedisTemplate redisTemplate;
 
     /**
      * 发送手机验证码
+     * <p>
+     * 将生成的验证码存入 Redis（设置过期时间），并通过短信服务发送给用户。
+     * </p>
+     *
+     * @param phone   用户手机号
+     * @param session HttpSession
+     * @return 发送结果
      */
     @PostMapping("code")
     public Result sendCode(@RequestParam("phone") String phone, HttpSession session) {
@@ -51,8 +62,14 @@ public class UserController {
     }
 
     /**
-     * 登录功能
+     * 用户登录
+     * <p>
+     * 支持两种登录方式：手机号 + 验证码，或手机号 + 密码。登录成功后将用户信息保存到 Redis。
+     * </p>
+     *
      * @param loginForm 登录参数，包含手机号、验证码；或者手机号、密码
+     * @param session   HttpSession
+     * @return 登录结果，成功时返回用户信息
      */
     @PostMapping("/login")
     public Result login(@RequestBody LoginFormDTO loginForm, HttpSession session){
@@ -60,8 +77,12 @@ public class UserController {
     }
 
     /**
-     * 登出功能
-     * @return 无
+     * 用户登出
+     * <p>
+     * 清除当前线程中的用户信息占位。注：完整的登出功能还需移除 Redis 中的登录状态（待实现）。
+     * </p>
+     *
+     * @return 登出结果
      */
     @PostMapping("/logout")
     public Result logout(){
@@ -69,29 +90,53 @@ public class UserController {
         return Result.fail("功能未完成");
     }
 
+    /**
+     * 获取当前登录用户信息
+     * <p>
+     * 从 {@link UserHolder} 中获取已登录用户的简要信息（脱敏后的 UserDTO）。
+     * </p>
+     *
+     * @return 当前用户信息
+     */
     @GetMapping("/me")
     public Result me(){
         UserDTO user = UserHolder.getUser();
         return Result.ok(user);
     }
 
+    /**
+     * 查询用户详情（个人资料）
+     * <p>
+     * 根据用户 ID 查询其扩展资料（如性别、生日等），首次查看可能无数据。
+     * 返回时会屏蔽创建时间和更新时间字段。
+     * </p>
+     *
+     * @param userId 用户 ID
+     * @return 用户详情，或空结果
+     */
     @GetMapping("/info/{id}")
     public Result info(@PathVariable("id") Long userId){
-        // 查询详情
         UserInfo info = userInfoService.getById(userId);
         if (info == null) {
-            // 没有详情，应该是第一次查看详情
             return Result.ok();
         }
         info.setCreateTime(null);
         info.setUpdateTime(null);
-        // 返回
         return Result.ok(info);
     }
 
+    /**
+     * 根据 ID 查询用户
+     * <p>
+     * 查询用户基础信息，并使用 Hutool 的 {@link BeanUtil} 将实体转换为 DTO 返回，
+     * 避免敏感字段（如密码）泄露。
+     * </p>
+     *
+     * @param userId 用户 ID
+     * @return 用户简要信息，或空结果
+     */
     @GetMapping("/{id}")
     public Result queryUserById(@PathVariable("id") Long userId){
-        //查询详情
         User user = userService.getById(userId);
         if(user==null){
             return Result.ok();
@@ -101,8 +146,12 @@ public class UserController {
     }
 
     /**
-     * 签到功能
-     * @return
+     * 用户签到
+     * <p>
+     * 基于 Redis 的 Bitmap 实现每日签到，记录用户的签到状态。
+     * </p>
+     *
+     * @return 签到结果
      */
     @PostMapping("/sign")
     public Result sign(){
@@ -110,8 +159,12 @@ public class UserController {
     }
 
     /**
-     * 统计连续签到
-     * @return
+     * 统计连续签到天数
+     * <p>
+     * 基于 Redis 的 Bitmap 回溯计算用户当前连续签到的天数。
+     * </p>
+     *
+     * @return 连续签到天数
      */
     @GetMapping("/sign/count")
     public Result signCount(){
