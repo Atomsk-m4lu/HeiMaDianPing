@@ -35,7 +35,7 @@
 
 ### 🧩 可编排任务链引擎（自研）
 
-- **五阶段流水线**：PRE_VALIDATION → DATA_JUDGMENT → DATA_PROCESSING → DATA_INSERTION → POST_PROCESSING，各阶段独立配置串行/并行
+- **五阶段流水线**：PRE_VALIDATION → PRE_PROCESSING（数据判断）→ DATA_PROCESSING → DATA_INSERTION → POST_PROCESSING，各阶段独立配置串行/并行
 - **注解驱动**：`@TaskNode` 声明归属/顺序/线程池类型/可跳过语义，启动期构建不可变执行计划
 - **CPU / IO 双线程池物理隔离**，避免互相饥饿
 - **copy-merge 上下文并发模型**（参考 MVCC 多版本思想），解决并行节点写入竞争

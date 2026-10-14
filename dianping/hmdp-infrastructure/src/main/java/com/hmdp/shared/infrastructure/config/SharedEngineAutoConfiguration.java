@@ -64,8 +64,9 @@ public class SharedEngineAutoConfiguration {
     }
 
     @Bean
-    public FlashPayStateMachineFacade flashPayStateMachineFacade(StateEngine stateEngine) {
-        return new FlashPayStateMachineFacade(stateEngine);
+    public FlashPayStateMachineFacade flashPayStateMachineFacade(StateEngine stateEngine,
+                                                                 StateTaskRepository stateTaskRepository) {
+        return new FlashPayStateMachineFacade(stateEngine, stateTaskRepository);
     }
 
     @Bean

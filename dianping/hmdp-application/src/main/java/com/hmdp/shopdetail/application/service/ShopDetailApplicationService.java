@@ -115,7 +115,7 @@ public class ShopDetailApplicationService {
     public GuaranteeClaim submitGuaranteeClaim(GuaranteeClaim claim) {
         GuaranteeClaim savedClaim = domainService.createClaim(claim);
         if (flashPayStateMachineFacade != null) {
-            runCompensation(savedClaim);
+            runCompensation(savedClaim, false);
         }
         return savedClaim;
     }
@@ -129,7 +129,7 @@ public class ShopDetailApplicationService {
         if (claim == null || flashPayStateMachineFacade == null) {
             return claim;
         }
-        return runCompensation(claim);
+        return runCompensation(claim, true);
     }
 
     public GuaranteeClaim getGuaranteeClaim(String claimNo) {
@@ -145,12 +145,12 @@ public class ShopDetailApplicationService {
      * 这里刻意不把整个 {@link GuaranteeClaim} 直接交给引擎，而是转换成最小 payload：
      * CBB 只关心“状态怎么流转”，赔付业务字段由 flash-pay 场景自己解释。
      */
-    private GuaranteeClaim runCompensation(GuaranteeClaim claim) {
-        StateTask result = flashPayStateMachineFacade.start(
-                claim.getClaimNo(),
-                String.valueOf(claim.getShopId()),
-                new FlashPayPayload(claim.getPlanCode(), claim.getReason())
-        );
+    private GuaranteeClaim runCompensation(GuaranteeClaim claim, boolean allowResume) {
+        FlashPayPayload payload = new FlashPayPayload(claim.getPlanCode(), claim.getReason());
+        // 首次提交走 start（新建任务）；重试入口走 startOrResume（已有任务则 resume，保留进度与重试计数）
+        StateTask result = allowResume
+                ? flashPayStateMachineFacade.startOrResume(claim.getClaimNo(), String.valueOf(claim.getShopId()), payload)
+                : flashPayStateMachineFacade.start(claim.getClaimNo(), String.valueOf(claim.getShopId()), payload);
         // 引擎输出的状态与结果说明需要回写，供用户查询申诉进度。
         claim.setStatus(result.getCurrentState());
         claim.setResultMessage(result.getLastMessage());
