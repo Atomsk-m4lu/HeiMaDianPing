@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import com.hmdp.entity.MqEventRecord;
 import com.hmdp.mapper.MqEventRecordMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.messaging.support.MessageBuilder;
@@ -32,11 +33,14 @@ public class RocketMqReliablePublisher {
 
     private final RocketMQTemplate rocketMQTemplate;
     private final MqEventRecordMapper mqEventRecordMapper;
+    private final MetricsRecorder metricsRecorder;
 
     public RocketMqReliablePublisher(RocketMQTemplate rocketMQTemplate,
-                                     MqEventRecordMapper mqEventRecordMapper) {
+                                     MqEventRecordMapper mqEventRecordMapper,
+                                     MetricsRecorder metricsRecorder) {
         this.rocketMQTemplate = rocketMQTemplate;
         this.mqEventRecordMapper = mqEventRecordMapper;
+        this.metricsRecorder = metricsRecorder;
     }
 
     /**
@@ -112,6 +116,7 @@ public class RocketMqReliablePublisher {
      * 由 MqEventRetryJob 按指数退避策略逐步增加重试间隔。</p>
      */
     private void persistFailure(String eventType, String destination, String payload, Exception e) {
+        metricsRecorder.incMqEventPersisted();
         MqEventRecord record = new MqEventRecord()
                 .setEventType(eventType)
                 .setDestination(destination)

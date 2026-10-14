@@ -4,6 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.hmdp.shared.SeckillBugFlags;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.VoucherOrder;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
 import com.hmdp.service.impl.OrderCreateRecoveryService;
@@ -61,6 +62,7 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
     private final IVoucherOrderService voucherOrderService;
     private final OrderCreateRecoveryService orderCreateRecoveryService;
     private final RollbackFailureService rollbackFailureService;
+    private final MetricsRecorder metricsRecorder;
 
     /** 订单处理线程池 — 核心线程数=CPU核数，最大=2倍CPU核数，有界队列1024，拒绝策略CallerRuns */
     private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
@@ -238,6 +240,7 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
                     SeckillVoucherOrderMessage orderMessage = JSONUtil.toBean(body, SeckillVoucherOrderMessage.class);
                     log.error("batch process message failed, create recovery task, orderId={}",
                             orderMessage.getOrderId(), e);
+                    metricsRecorder.incConsumeBatchError();
                     if (orderCreateRecoveryService != null) {
                         orderCreateRecoveryService.createRecoveryTask(orderMessage, body, failedMsg.getReconsumeTimes());
                     }

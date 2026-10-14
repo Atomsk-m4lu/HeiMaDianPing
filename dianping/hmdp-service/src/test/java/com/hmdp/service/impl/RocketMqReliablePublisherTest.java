@@ -2,6 +2,8 @@ package com.hmdp.service.impl;
 
 import com.hmdp.entity.MqEventRecord;
 import com.hmdp.mapper.MqEventRecordMapper;
+import com.hmdp.metrics.MetricsRecorder;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.Message;
@@ -20,7 +22,7 @@ class RocketMqReliablePublisherTest {
     void publish_shouldPersistFailureRecordWhenSendThrows() {
         RocketMQTemplate rocketMQTemplate = mock(RocketMQTemplate.class);
         MqEventRecordMapper mapper = mock(MqEventRecordMapper.class);
-        RocketMqReliablePublisher publisher = new RocketMqReliablePublisher(rocketMQTemplate, mapper);
+        RocketMqReliablePublisher publisher = new RocketMqReliablePublisher(rocketMQTemplate, mapper, new MetricsRecorder(new SimpleMeterRegistry()));
         doThrow(new RuntimeException("mq down")).when(rocketMQTemplate)
                 .syncSend(eq("topic:tag"), any(Message.class));
 
@@ -34,7 +36,7 @@ class RocketMqReliablePublisherTest {
     void publish_shouldReturnTrueWhenSendSucceeds() {
         RocketMQTemplate rocketMQTemplate = mock(RocketMQTemplate.class);
         MqEventRecordMapper mapper = mock(MqEventRecordMapper.class);
-        RocketMqReliablePublisher publisher = new RocketMqReliablePublisher(rocketMQTemplate, mapper);
+        RocketMqReliablePublisher publisher = new RocketMqReliablePublisher(rocketMQTemplate, mapper, new MetricsRecorder(new SimpleMeterRegistry()));
 
         boolean success = publisher.publish("SECKILL_ORDER_CREATE", "topic:tag", "{\"id\":1}");
 

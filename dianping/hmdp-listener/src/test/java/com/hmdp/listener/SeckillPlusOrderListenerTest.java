@@ -3,10 +3,12 @@ package com.hmdp.listener;
 import cn.hutool.json.JSONUtil;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.VoucherOrder;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
 import com.hmdp.service.impl.OrderCreateRecoveryService;
 import com.hmdp.service.impl.RollbackFailureService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -37,7 +39,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldCreateVoucherOrder() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.CREATED);
 
@@ -50,7 +52,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldRollbackAndNotThrowWhenStockSyncFails() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.OUT_OF_STOCK);
 
@@ -68,7 +70,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldIgnoreDuplicateAndNotRollback() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.DUPLICATE);
 
@@ -82,7 +84,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldThrowWhenDbExceptionOccursBeforeMqRetryThreshold() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message))
                 .thenThrow(new RuntimeException("Connection pool exhausted"));
@@ -99,7 +101,7 @@ class SeckillPlusOrderListenerTest {
         when(voucherOrderService.createVoucherOrderPlus(any())).thenReturn(VoucherOrderCreateResult.CREATED);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));
@@ -121,7 +123,7 @@ class SeckillPlusOrderListenerTest {
                 .thenReturn(VoucherOrderCreateResult.CREATED);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));
@@ -152,7 +154,7 @@ class SeckillPlusOrderListenerTest {
         });
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));

@@ -3,9 +3,12 @@ package com.hmdp.service.impl;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.OrderCreateRecoveryTask;
 import com.hmdp.mapper.OrderCreateRecoveryTaskMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -43,6 +46,7 @@ class OrderCreateRecoveryServiceTest {
         OrderCreateRecoveryTaskMapper taskMapper = mock(OrderCreateRecoveryTaskMapper.class);
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService service = new OrderCreateRecoveryService(taskMapper, voucherOrderService, 0, 10, 5);
+        ReflectionTestUtils.setField(service, "metricsRecorder", new MetricsRecorder(new SimpleMeterRegistry()));
         OrderCreateRecoveryTask task = OrderCreateRecoveryTask.pending(
                 "recover-order-101",
                 101L,

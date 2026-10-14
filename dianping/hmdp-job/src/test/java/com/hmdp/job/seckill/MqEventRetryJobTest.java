@@ -2,7 +2,9 @@ package com.hmdp.job.seckill;
 
 import com.hmdp.entity.MqEventRecord;
 import com.hmdp.mapper.MqEventRecordMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.service.impl.RocketMqReliablePublisher;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -60,6 +62,7 @@ class MqEventRetryJobTest {
     void run_shouldMarkFailedWhenRetryExhausted() {
         MqEventRetryJob job = new MqEventRetryJob();
         ReflectionTestUtils.setField(job, "maxRetryCount", 5);
+        ReflectionTestUtils.setField(job, "metricsRecorder", new MetricsRecorder(new SimpleMeterRegistry()));
         MqEventRecordMapper mapper = mock(MqEventRecordMapper.class);
         RocketMqReliablePublisher publisher = mock(RocketMqReliablePublisher.class);
         ReflectionTestUtils.setField(job, "mqEventRecordMapper", mapper);

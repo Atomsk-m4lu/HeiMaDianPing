@@ -3,6 +3,7 @@ package com.hmdp.job.seckill;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hmdp.entity.MqEventRecord;
 import com.hmdp.mapper.MqEventRecordMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.service.impl.RocketMqReliablePublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,10 @@ public class MqEventRetryJob {
     /** 可靠消息发布器 —— 将待重试记录重新发送到 RocketMQ */
     @Resource
     private RocketMqReliablePublisher rocketMqReliablePublisher;
+
+    /** 业务指标登记处（批次2 ③）：重试耗尽事件计数 */
+    @Resource
+    private MetricsRecorder metricsRecorder;
 
     /** 最大重试次数：达到后转 FAILED 终态等待人工处理（默认 5，可配置） */
     @Value("${seckill.mq-event.max-retry-count:5}")
@@ -98,7 +103,8 @@ public class MqEventRetryJob {
                 record.setRetryCount(nextRetryCount);
                 record.setLastError("resend failed at attempt " + nextRetryCount);
                 record.setUpdateTime(LocalDateTime.now());
-                if (STATUS_FAILED.equals(resolveStatusAfterFailure(nextRetryCount))) {
+                boolean exhausted = STATUS_FAILED.equals(resolveStatusAfterFailure(nextRetryCount));
+                if (exhausted) {
                     record.setEventStatus(STATUS_FAILED);
                     log.error("mq event retry exhausted, marked FAILED for manual handling, id={}, retryCount={}",
                             record.getId(), nextRetryCount);
@@ -106,6 +112,9 @@ public class MqEventRetryJob {
                     record.setNextRetryTime(LocalDateTime.now().plusSeconds(30));
                 }
                 mqEventRecordMapper.updateById(record);
+                if (exhausted) {
+                    metricsRecorder.incMqEventFailed();
+                }
             } catch (Exception e) {
                 // 单条异常不影响其他记录，只打 WARN 等待下轮重试
                 log.warn("mq event retry failed, id={}", record.getId(), e);

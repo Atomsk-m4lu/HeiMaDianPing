@@ -7,6 +7,7 @@ import com.hmdp.entity.VoucherReconcileLog;
 import com.hmdp.mapper.SeckillReconcileTaskMapper;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.mapper.VoucherReconcileLogMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.shared.reconciliation.model.ReconcileLogType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileAnomalyType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileCompensationStatus;
@@ -24,6 +25,7 @@ public class SeckillReconcileScanService {
     private final SeckillReconcileTaskMapper taskMapper;
     private final VoucherOrderMapper voucherOrderMapper;
     private final VoucherReconcileLogMapper voucherReconcileLogMapper;
+    private final MetricsRecorder metricsRecorder;
     private final int scanBatchSize;
     private final int scanDelayMinutes;
     private final int compensationMaxRetryCount;
@@ -33,6 +35,7 @@ public class SeckillReconcileScanService {
     public SeckillReconcileScanService(SeckillReconcileTaskMapper taskMapper,
                                        VoucherOrderMapper voucherOrderMapper,
                                        VoucherReconcileLogMapper voucherReconcileLogMapper,
+                                       MetricsRecorder metricsRecorder,
                                        @Value("${seckill.reconcile.scan-batch-size:100}") int scanBatchSize,
                                        @Value("${seckill.reconcile.scan-delay-minutes:3}") int scanDelayMinutes,
                                        @Value("${seckill.reconcile.compensation-max-retry-count:5}") int compensationMaxRetryCount,
@@ -40,6 +43,7 @@ public class SeckillReconcileScanService {
         this.taskMapper = taskMapper;
         this.voucherOrderMapper = voucherOrderMapper;
         this.voucherReconcileLogMapper = voucherReconcileLogMapper;
+        this.metricsRecorder = metricsRecorder;
         this.scanBatchSize = scanBatchSize;
         this.scanDelayMinutes = scanDelayMinutes;
         this.compensationMaxRetryCount = compensationMaxRetryCount;
@@ -107,6 +111,7 @@ public class SeckillReconcileScanService {
                 : SeckillReconcileTask.pending(anomalyType, orderId, userId, voucherId, traceId, detail,
                 compensationMaxRetryCount);
         taskMapper.insert(task);
+        metricsRecorder.incReconcileAnomaly();
     }
 
     private long countActiveTask(SeckillReconcileAnomalyType anomalyType, Long orderId, String traceId) {

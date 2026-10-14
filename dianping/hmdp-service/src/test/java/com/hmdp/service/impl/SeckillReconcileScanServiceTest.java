@@ -6,10 +6,12 @@ import com.hmdp.entity.VoucherReconcileLog;
 import com.hmdp.mapper.SeckillReconcileTaskMapper;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.mapper.VoucherReconcileLogMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.shared.reconciliation.model.ReconcileLogType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileAnomalyType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileCompensationStatus;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileTaskStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -31,7 +33,7 @@ class SeckillReconcileScanServiceTest {
         VoucherOrderMapper orderMapper = mock(VoucherOrderMapper.class);
         VoucherReconcileLogMapper logMapper = mock(VoucherReconcileLogMapper.class);
         SeckillReconcileScanService service =
-                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, 100, 3, 5, false);
+                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, new MetricsRecorder(new SimpleMeterRegistry()), 100, 3, 5, false);
 
         VoucherOrder order = new VoucherOrder()
                 .setId(101L)
@@ -54,7 +56,7 @@ class SeckillReconcileScanServiceTest {
         VoucherOrderMapper orderMapper = mock(VoucherOrderMapper.class);
         VoucherReconcileLogMapper logMapper = mock(VoucherReconcileLogMapper.class);
         SeckillReconcileScanService service =
-                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, 100, 3, 5, false);
+                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, new MetricsRecorder(new SimpleMeterRegistry()), 100, 3, 5, false);
 
         VoucherOrder order = new VoucherOrder()
                 .setId(101L)
@@ -77,7 +79,7 @@ class SeckillReconcileScanServiceTest {
         VoucherOrderMapper orderMapper = mock(VoucherOrderMapper.class);
         VoucherReconcileLogMapper logMapper = mock(VoucherReconcileLogMapper.class);
         SeckillReconcileScanService service =
-                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, 100, 3, 5, true);
+                new SeckillReconcileScanService(taskMapper, orderMapper, logMapper, new MetricsRecorder(new SimpleMeterRegistry()), 100, 3, 5, true);
 
         VoucherReconcileLog deductLog = new VoucherReconcileLog()
                 .setOrderId(101L)

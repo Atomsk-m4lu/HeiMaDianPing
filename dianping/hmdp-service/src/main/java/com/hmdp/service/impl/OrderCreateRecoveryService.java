@@ -6,6 +6,7 @@ import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.entity.OrderCreateRecoveryTask;
 import com.hmdp.mapper.OrderCreateRecoveryTaskMapper;
+import com.hmdp.metrics.MetricsRecorder;
 import com.hmdp.orderverify.model.OrderCreateRecoveryStatus;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
@@ -14,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -59,6 +62,10 @@ public class OrderCreateRecoveryService {
 
     /** 人工审核超时窗口（分钟），超期未处理需告警升级 */
     private final int manualReviewWindowMinutes;
+
+    /** 业务指标登记处（批次2 ③）：转人工审核事件计数 */
+    @Resource
+    private MetricsRecorder metricsRecorder;
 
     /**
      * 构造器注入 —— 所有配置项通过 @Value 注入，均有默认值兜底。
@@ -227,6 +234,7 @@ public class OrderCreateRecoveryService {
      * </p>
      */
     private void moveToManualReview(OrderCreateRecoveryTask task, String message) {
+        metricsRecorder.incRecoveryManualReview();
         task.setTaskStatus(OrderCreateRecoveryStatus.MANUAL_REVIEW.name());
         task.setLastMessage(message);
         task.setAlarmStatus("PENDING");
