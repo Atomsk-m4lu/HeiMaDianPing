@@ -35,15 +35,21 @@ public class SeckillOrderTimeoutService {
 
     public void closeTimeoutOrders() {
         QueryWrapper<VoucherOrder> wrapper = new QueryWrapper<>();
-        wrapper.eq("status", VoucherOrderStatus.UNPAID).last("limit 20");
+        wrapper.eq("status", VoucherOrderStatus.UNPAID).orderByAsc("create_time").last("limit 20");
         List<VoucherOrder> orders = voucherOrderMapper.selectList(wrapper);
         for (VoucherOrder order : orders) {
             if (order.getCreateTime() == null || order.getCreateTime().isAfter(LocalDateTime.now().minusMinutes(15))) {
                 continue;
             }
-            order.setStatus(VoucherOrderStatus.CANCELLED);
-            order.setUpdateTime(LocalDateTime.now());
-            voucherOrderMapper.updateById(order);
+            int updated = voucherOrderMapper.update(null,
+                    new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<VoucherOrder>()
+                            .eq("id", order.getId())
+                            .eq("status", VoucherOrderStatus.UNPAID)
+                            .set("status", VoucherOrderStatus.CANCELLED)
+                            .set("update_time", LocalDateTime.now()));
+            if (updated == 0) {
+                continue;
+            }
             restoreMysqlStock(order);
             restoreRedisReservation(order);
         }

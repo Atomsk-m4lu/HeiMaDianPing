@@ -65,11 +65,56 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
                 .page(new Page<>(current, SystemConstants.MAX_PAGE_SIZE));
         // 获取当前页数据
         List<Blog> records = page.getRecords();
-        // 查询用户
-        records.forEach(blog -> {
-            this.isBlogLiked(blog);
-            this.queryBlogUser(blog);
-        });
+
+        // —— 批量组装用户信息 ——
+        Set<Long> userIds = records.stream()
+                .map(Blog::getUserId).filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        java.util.Map<Long, User> userMap = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : userService.listByIds(userIds).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+        for (Blog blog : records) {
+            User u = userMap.get(blog.getUserId());
+            if (u != null) {
+                blog.setName(u.getNickName());
+                blog.setIcon(u.getIcon());
+            } else {
+                blog.setName("");
+                blog.setIcon("");
+            }
+        }
+
+        // —— 批量查询点赞状态（仅已登录用户） ——
+        UserDTO user = UserHolder.getUser();
+        if (user != null) {
+            Long uid = user.getId();
+            List<String> likedKeys = records.stream()
+                    .map(b -> BLOG_LIKED_KEY + b.getId()).collect(Collectors.toList());
+            java.util.Map<String, Double> scoreMap = new java.util.HashMap<>();
+            java.util.List<Object> results = stringRedisTemplate.executePipelined(
+                    (org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                        for (String likedKey : likedKeys) {
+                            connection.zScore(likedKey.getBytes(), uid.toString().getBytes());
+                        }
+                        return null;
+                    });
+            for (int i = 0; i < likedKeys.size(); i++) {
+                Object raw = results.get(i);
+                if (raw instanceof Double) {
+                    scoreMap.put(likedKeys.get(i), (Double) raw);
+                }
+            }
+            for (Blog blog : records) {
+                Double sc = scoreMap.get(BLOG_LIKED_KEY + blog.getId());
+                blog.setIsLike(sc != null);
+            }
+        } else {
+            for (Blog blog : records) {
+                blog.setIsLike(false);
+            }
+        }
+
         return Result.ok(records);
     }
 
@@ -77,24 +122,20 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     public Result updateLike(Long id){
         //1.获取当前用户
         Long userId = UserHolder.getUser().getId();
-        //2.判断当前用户有没有点赞
+        //2.判断当前用户有没有点赞 — ZSet 原子闸门
         String key=BLOG_LIKED_KEY+id;
         Double score = stringRedisTemplate.opsForZSet().score(key, userId.toString());
         if(score==null) {
-            //3.如果未点赞，可以点赞
-            //3.1.数据库点赞数+1
-            boolean isSuccess = update().setSql("liked=liked+1").eq("id", id).update();
-            //3.2.保存用户到redis的set集合  zadd key value score
-            if(isSuccess){
-                stringRedisTemplate.opsForZSet().add(key,userId.toString(),System.currentTimeMillis());
+            //3.未点赞：先 zadd，返回新增成功才执行 DB +1
+            Boolean added = stringRedisTemplate.opsForZSet().add(key, userId.toString(), System.currentTimeMillis());
+            if (Boolean.TRUE.equals(added)) {
+                update().setSql("liked=liked+1").eq("id", id).update();
             }
         }else {
-            //4.如果已经点赞，取消点赞
-            //4.1.数据库点赞数-1
-            boolean isSuccess = update().setSql("liked=liked-1").eq("id", id).update();
-            if(isSuccess) {
-                //4.2.将用户从set集合中移除
-                stringRedisTemplate.opsForZSet().remove(key,userId.toString());
+            //4.已点赞：先 zrem，返回确实移除才执行 DB -1，并加 liked>0 下界保护
+            Long removed = stringRedisTemplate.opsForZSet().remove(key, userId.toString());
+            if (removed != null && removed > 0) {
+                update().setSql("liked=liked-1").eq("id", id).gt("liked", 0).update();
             }
         }
         return Result.ok();
@@ -139,13 +180,16 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         }
         //查询笔记作者的所有粉丝 select* from tb_follow where follow_user_id=?
         List<Follow> follows = followService.query().eq("follow_user_id", user.getId()).list();
-        //推送笔记id给所有粉丝
-        for (Follow follow : follows) {
-            //获取粉丝id
-            Long userId = follow.getUserId();
-            //推送
-            String key=FEED_KEY+userId;
-            stringRedisTemplate.opsForZSet().add(key,blog.getId().toString(),System.currentTimeMillis());
+        //推送笔记id给所有粉丝 —— 用 pipeline 批量写入，减少 Redis 交互次数
+        if (!follows.isEmpty()) {
+            long score = System.currentTimeMillis();
+            stringRedisTemplate.executePipelined((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                for (Follow follow : follows) {
+                    byte[] feedKey = (FEED_KEY + follow.getUserId()).getBytes();
+                    connection.zAdd(feedKey, score, blog.getId().toString().getBytes());
+                }
+                return null;
+            });
         }
         // 返回id
         return Result.ok(blog.getId());
@@ -231,6 +275,11 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
     private void queryBlogUser(Blog blog) {
         Long userId = blog.getUserId();
         User user = userService.getById(userId);
+        if (user == null) {
+            blog.setName("");
+            blog.setIcon("");
+            return;
+        }
         blog.setName(user.getNickName());
         blog.setIcon(user.getIcon());
     }

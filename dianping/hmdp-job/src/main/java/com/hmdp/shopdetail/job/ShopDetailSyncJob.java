@@ -26,6 +26,7 @@ public class ShopDetailSyncJob {
     public void warmupCoreShopDetail() {
         try {
             shopDetailFacade.getShopDetail(1L);
+            shopDetailFacade.warmupShopCache(1L, 1800L);
         } catch (Exception e) {
             log.warn("shop detail warmup failed", e);
         }

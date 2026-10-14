@@ -110,7 +110,7 @@ public class CacheClient {
                     throw new RuntimeException(e);
                 }finally {
                     //释放锁
-                    unLock(key);
+                    unLock(lockKey);
                 }
             });
 

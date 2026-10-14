@@ -9,8 +9,10 @@ import com.hmdp.mapper.OrderCreateRecoveryTaskMapper;
 import com.hmdp.orderverify.model.OrderCreateRecoveryStatus;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -39,6 +41,7 @@ import java.util.List;
  *   <li>{@code seckill.order-create-recovery.manual-review-window-minutes=5} — 人工审核超时窗口</li>
  * </ul></p>
  */
+@Slf4j
 @Service
 public class OrderCreateRecoveryService {
 
@@ -91,15 +94,19 @@ public class OrderCreateRecoveryService {
      * @param reconsumeTimes RocketMQ 实际重试次数（用于日志追踪）
      */
     public void createRecoveryTask(SeckillVoucherOrderMessage orderMessage, String sourceMessage, int reconsumeTimes) {
-        taskMapper.insert(OrderCreateRecoveryTask.pending(
-                "recover-order-" + orderMessage.getOrderId(),
-                orderMessage.getOrderId(),
-                orderMessage.getUserId(),
-                orderMessage.getVoucherId(),
-                orderMessage.getTraceId(),
-                sourceMessage,
-                maxRetryCount
-        ).setLastMessage("MQ retries exhausted at reconsumeTimes=" + reconsumeTimes));
+        try {
+            taskMapper.insert(OrderCreateRecoveryTask.pending(
+                    "recover-order-" + orderMessage.getOrderId(),
+                    orderMessage.getOrderId(),
+                    orderMessage.getUserId(),
+                    orderMessage.getVoucherId(),
+                    orderMessage.getTraceId(),
+                    sourceMessage,
+                    maxRetryCount
+            ).setLastMessage("MQ retries exhausted at reconsumeTimes=" + reconsumeTimes));
+        } catch (DuplicateKeyException e) {
+            log.info("recovery task already exists, skip creating, orderId={}", orderMessage.getOrderId());
+        }
     }
 
     /**

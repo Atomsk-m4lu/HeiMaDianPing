@@ -31,9 +31,6 @@ import javax.annotation.Generated;
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.LongStream;
 
@@ -84,7 +81,6 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     }
 
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR= Executors.newFixedThreadPool(10);
       /*   public Shop queryWithLogicalExpire(Long id)   {
 //        //1.尝试从Redis查询商铺缓存
 //        String shopJson = stringRedisTemplate.opsForValue().get(RedisConstants.CACHE_SHOP_KEY + id);
@@ -222,10 +218,9 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
      */
 
 
-    public void saveShop2Redis(Long id,Long expireSeconds) throws InterruptedException {
+    public void saveShop2Redis(Long id,Long expireSeconds){
         //1.查询店铺数据
         Shop shop = getById(id);
-        Thread.sleep(200);
         //2.封装成逻辑过期
         RedisData redisData = new RedisData();
         redisData.setData(shop);

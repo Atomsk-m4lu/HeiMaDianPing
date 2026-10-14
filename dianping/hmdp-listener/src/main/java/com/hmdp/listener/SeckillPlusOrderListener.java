@@ -106,9 +106,9 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
      * ② 调 Service 层建订单；
      * ③ 根据建单结果分流处理：库存不足 → 回滚 Redis / 重复消息 → 幂等跳过 / 异常 → 交给 MQ 或恢复任务。</p>
      *
-     * <p>异常处理策略：MQ 重试次数未超上限 → 重新抛出触发 RocketMQ RETRY；
-     * 超上限后静默吞掉异常、写 recovery_task 表，让 RecoveryJob 定时兜底补单，
-     * 避免 Broker 整批重试引发雪崩。</p>
+     * <p>异常处理策略：任何异常均被上层 prepareStart 批量监听器捕获，
+     * 捕获后写入 recovery_task 表生成恢复任务，由 OrderCreateRecoveryJob 定时兜底补单，
+     * Broker 永远收到 CONSUME_SUCCESS（不触发整批重试，避免雪崩）。</p>
      *
      * @param orderMessage   反序列化后的秒杀下单消息（含 orderId/userId/voucherId/traceId）
      * @param sourceMessage  原始 JSON 字符串（写入 recovery_task 表用，保留完整原文方便排查）
@@ -143,14 +143,12 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
         } catch (Exception e) {
             // 异常分两种情况处理：
             if (reconsumeTimes < MQ_MAX_RECONSUME_TIMES) {
-                // ① 重试次数还没到上限 → 重新抛出去，让上层 CompletableFuture 线程
-                //    的异常传到 RocketMQ，Broker 会按延迟级别重新投递（10s/30s/1min...）
-                log.warn("createVoucherOrderPlus failed, request MQ retry, orderId={}, reconsumeTimes={}",
+                // ① 抛出异常由上层 prepareStart 批量监听器捕获，统一写入 recovery_task 表
+                log.warn("createVoucherOrderPlus failed, will throw for batch recovery, orderId={}, reconsumeTimes={}",
                         order.getId(), reconsumeTimes, e);
                 throw e;
             }
-            // ② 重试耗尽 → 不再抛（避免 Broker 把整批消息都重投），
-            //    而是在本地写 recovery_task 表，让 OrderCreateRecoveryJob 定时扫出来补单
+            // ② 重试耗尽 → 直接在本地写 recovery_task 表，让 OrderCreateRecoveryJob 定时扫出来补单
             log.error("createVoucherOrderPlus failed after MQ retries, create recovery task, orderId={}, reconsumeTimes={}",
                     order.getId(), reconsumeTimes, e);
             if (orderCreateRecoveryService != null) {
@@ -217,21 +215,23 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
 
             // 逐条包装成异步任务，丢进自建线程池并发执行
             for (MessageExt msg : msgs) {
-                // body 解码（StandardCharsets.UTF_8 防止乱码）
-                String body = new String(msg.getBody(), StandardCharsets.UTF_8);
-                // runAsync：无返回值的异步任务，executor 是 CallerRunsPolicy 线程池
                 futures.add(CompletableFuture.runAsync(() -> processMessage(msg), executor));
             }
 
-            // ③ 阻塞等待所有任务完成 —— 关键设计！
-            // 必须等全部 Future.get() 返回后才 ACK，否则 Broker 以为消费成功但实际还在跑，
-            // JVM 此时挂掉就会丢消息。这里不关心单个任务结果，成功失败都继续等下一个。
-            for (CompletableFuture<Void> future : futures) {
+            // ③ 阻塞等待所有任务完成 —— 用索引循环，方便异常时拿到对应的原始消息
+            for (int i = 0; i < futures.size(); i++) {
                 try {
-                    future.get();
+                    futures.get(i).get();
                 } catch (Exception e) {
-                    // 单条失败只记日志，让对账引擎兜底，不触发 RocketMQ 整批重试
-                    log.error("batch process message unexpected error, left to reconciliation", e);
+                    // 单条消息处理异常 → 生成恢复任务，让 OrderCreateRecoveryJob 定时兜底补单
+                    MessageExt failedMsg = msgs.get(i);
+                    String body = new String(failedMsg.getBody(), StandardCharsets.UTF_8);
+                    SeckillVoucherOrderMessage orderMessage = JSONUtil.toBean(body, SeckillVoucherOrderMessage.class);
+                    log.error("batch process message failed, create recovery task, orderId={}",
+                            orderMessage.getOrderId(), e);
+                    if (orderCreateRecoveryService != null) {
+                        orderCreateRecoveryService.createRecoveryTask(orderMessage, body, failedMsg.getReconsumeTimes());
+                    }
                 }
             }
 

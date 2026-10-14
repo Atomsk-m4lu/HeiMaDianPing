@@ -5,6 +5,7 @@ import com.hmdp.shared.infrastructure.persistence.mapper.StateTaskMapper;
 import com.hmdp.shared.stateengine.model.StateTask;
 import com.hmdp.shared.stateengine.model.StateTaskStatus;
 import com.hmdp.shared.stateengine.spi.StateTaskRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
 import javax.annotation.Resource;
@@ -15,6 +16,7 @@ import javax.annotation.Resource;
  * 通过 MyBatis Plus 操作 tb_state_task 表。
  * </p>
  */
+@Slf4j
 @Repository
 public class MybatisStateTaskRepository implements StateTaskRepository {
 
@@ -34,7 +36,21 @@ public class MybatisStateTaskRepository implements StateTaskRepository {
         if (existing != null) {
             com.hmdp.shared.infrastructure.persistence.dataobject.StateTask dataObject = toDataObject(task);
             dataObject.setId(existing.getId());
-            stateTaskMapper.updateById(dataObject);
+            // 条件更新：where task_id=? and runtime_status=旧状态 —— 防止并发 resume 互相覆盖
+            com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<com.hmdp.shared.infrastructure.persistence.dataobject.StateTask> uw =
+                    new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<>();
+            uw.eq("task_id", task.getTaskId())
+                    .eq("runtime_status", existing.getRuntimeStatus())
+                    .set("current_state", dataObject.getCurrentState())
+                    .set("runtime_status", dataObject.getRuntimeStatus())
+                    .set("last_message", dataObject.getLastMessage())
+                    .set("retry_count", dataObject.getRetryCount())
+                    .set("updated_at", dataObject.getUpdatedAt());
+            int updated = stateTaskMapper.update(null, uw);
+            if (updated == 0) {
+                log.warn("state task concurrent update skipped, taskId={}, expectedRuntimeStatus={}",
+                        task.getTaskId(), existing.getRuntimeStatus());
+            }
         } else {
             stateTaskMapper.insert(toDataObject(task));
         }

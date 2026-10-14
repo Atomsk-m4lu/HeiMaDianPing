@@ -68,4 +68,9 @@ public class ShopDetailFacadeImpl implements ShopDetailFacade {
     public GuaranteeClaim getGuaranteeClaim(String claimNo) {
         return shopDetailApplicationService.getGuaranteeClaim(claimNo);
     }
+
+    @Override
+    public void warmupShopCache(Long shopId, Long expireSeconds) {
+        shopDetailApplicationService.warmupShopCache(shopId, expireSeconds);
+    }
 }

@@ -26,4 +26,7 @@ public interface ShopDetailFacade {
 
     /** 按申诉单号查询申诉详情 */
     GuaranteeClaim getGuaranteeClaim(String claimNo);
+
+    /** 预热商铺逻辑过期缓存（写入 Redis，用于商铺详情页缓存穿透兜底） */
+    void warmupShopCache(Long shopId, Long expireSeconds);
 }

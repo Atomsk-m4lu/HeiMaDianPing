@@ -1,5 +1,6 @@
 package com.hmdp.shopdetail.application.service;
 
+import com.hmdp.service.IShopService;
 import com.hmdp.shopdetail.application.task.ShopDetailTaskContext;
 import com.hmdp.shopdetail.domain.model.GuaranteeClaim;
 import com.hmdp.shopdetail.domain.model.ShopDetailAggregate;
@@ -50,6 +51,9 @@ public class ShopDetailApplicationService {
     /** 无忧闪赔场景门面，内部委托通用状态引擎执行。 */
     @Autowired(required = false)
     private FlashPayStateMachineFacade flashPayStateMachineFacade;
+
+    @javax.annotation.Resource
+    private IShopService shopService;
 
     /**
      * 构造函数注入两个必选依赖
@@ -130,6 +134,10 @@ public class ShopDetailApplicationService {
 
     public GuaranteeClaim getGuaranteeClaim(String claimNo) {
         return domainService.getClaim(claimNo);
+    }
+
+    public void warmupShopCache(Long shopId, Long expireSeconds) {
+        shopService.saveShop2Redis(shopId, expireSeconds);
     }
 
     /**

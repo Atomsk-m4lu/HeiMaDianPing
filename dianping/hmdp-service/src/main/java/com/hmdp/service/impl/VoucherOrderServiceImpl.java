@@ -348,7 +348,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 .setId(message.getOrderId())
                 .setUserId(message.getUserId())
                 .setVoucherId(message.getVoucherId())
-                .setTraceId(message.getTraceId());
+                .setTraceId(message.getTraceId())
+                .setStatus(com.hmdp.shared.reconciliation.model.VoucherOrderStatus.UNPAID)
+                .setCreateTime(LocalDateTime.now());
 
         // 1. 先插入订单 — 主键冲突说明是重复消息，幂等忽略
         try {
