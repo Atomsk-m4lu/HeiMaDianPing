@@ -14,9 +14,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.shopreview.dto.CreateShopReviewRequest;
 import com.hmdp.shopreview.service.ShopReviewRewardService;
 import com.hmdp.utils.CacheClient;
+import com.hmdp.utils.MultiLevelCacheService;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisData;
 import com.hmdp.utils.SystemConstants;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
@@ -53,6 +55,14 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private CacheClient clientClient;
 
+    /** 多级缓存服务（批次3 ②：L1 本地缓存叠加在逻辑过期之上） */
+    @Resource
+    private MultiLevelCacheService multiLevelCacheService;
+
+    /** 本地缓存开关：false = 完全回退到单级 Redis 链路（批次3 之前的原行为） */
+    @Value("${cache.local.enabled:true}")
+    private boolean localCacheEnabled;
+
     @Resource
     private ShopReviewRewardService shopReviewRewardService;
     @Override
@@ -71,8 +81,10 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
         //用逻辑过期解决缓存击穿
         // Shop shop = queryWithLogicalExpire(id);
-        Shop shop = clientClient.
-                queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        // 批次3 ②：默认走多级缓存（L1 本地 → L2 Redis 逻辑过期 → DB）；开关关闭则完全回退单级
+        Shop shop = localCacheEnabled
+                ? multiLevelCacheService.queryWithLocalCache(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES)
+                : clientClient.queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
         if(shop==null){
 
             return Result.fail("店铺不存在！");
@@ -238,8 +250,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
         //1.先修改数据库
         updateById(shop);
-        //2.删除缓存
-        stringRedisTemplate.delete(CACHE_SHOP_KEY+shop.getId());
+        //2.删除缓存：本地+Redis 双删，并广播其他实例失效（批次3 ②）
+        multiLevelCacheService.evictAndBroadcast(CACHE_SHOP_KEY, shop.getId());
         return Result.ok();
     }
 

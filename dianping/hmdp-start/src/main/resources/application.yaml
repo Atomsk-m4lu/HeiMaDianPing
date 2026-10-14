@@ -92,3 +92,8 @@ seckill:
   # ===== 批次1 ⑤：本地消息表重试上限（达到后转 FAILED 终态，人工介入） =====
   mq-event:
     max-retry-count: 5
+
+# ===== 批次3 ②：多级缓存开关（L1 本地 Caffeine；false=完全回退单级 Redis 逻辑过期链路） =====
+cache:
+  local:
+    enabled: true
