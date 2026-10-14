@@ -29,6 +29,9 @@
 - **消息可靠性治理**：同步发送 + 本地消息表兜底 + 定时重试；消费失败分级处理（异常捕获生成恢复任务 → 重放 → 人工审核，不依赖 MQ 整批重试）
 - **超时关单**：延时消息触发 + 定时兜底扫描双保险，关单幂等回补库存
 - **对账体系**：DEDUCT / RESTORE 对账日志（含库存前后快照）+ 订单域与库存域双向扫描 + 异常工单分级处置
+- **入口限流**：滑动窗口限流（Redis ZSET + Lua 原子淘汰/计数/写入），按用户 1s/5 次可配可开关，超限直接 429
+- **失败路径留痕**：Redis 回滚失败落 `tb_rollback_failure_log` + 告警标记，与对账扫描互补；本地消息表重试设有上限与 FAILED 终态
+- **可观测性**：九个业务指标（重试耗尽 / 回滚失败 / 转人工 / 对账异常 / 限流拒绝 / 缓存命中率…）启动预注册并接入 Prometheus，压测收尾看"一致性体检表"（导学 Part 15.0）
 
 ### 🧩 可编排任务链引擎（自研）
 
@@ -44,6 +47,12 @@
 - **断点续传式持久化**：StateTask + StateTransitionLog 全部落库（SPI 扩展点，内存实现 / MyBatis 实现可切换）
 - **失败策略分层**：FailurePolicy（业务层：该不该重试）+ RetryPolicy（引擎层：还剩几次），不可重试自动转人工
 - **落地场景**：无忧闪赔赔付流程（SUBMITTED → APPROVED → COMPLETED / MANUAL_REVIEW）
+
+### 🧠 多级缓存与失效广播
+
+- **三级读取路径**：Caffeine 本地缓存（L1）→ Redis 逻辑过期（L2，复用 `CacheClient` 模板）→ MySQL；L1 存"已反序列化对象 + 真实逻辑过期时间"，命中也要校验过期
+- **写路径一致性**：先更库 → 本地 + Redis 双删 → RocketMQ **BROADCASTING** 广播失效（每实例必达）+ "从头消费"冷启动修正；广播失败由 L1 自身逻辑过期兜底
+- **可回退**：`cache.local.enabled=false` 一键回到单级 Redis 链路；命中率指标 `hmdp_cache_local_hits_total / misses_total` 接入 Prometheus
 
 ### 🧪 故障演练与压测闭环
 
