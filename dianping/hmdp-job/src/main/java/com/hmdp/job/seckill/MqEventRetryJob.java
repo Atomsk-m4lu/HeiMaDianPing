@@ -57,13 +57,17 @@ public class MqEventRetryJob {
         if (mqEventRecordMapper == null || rocketMqReliablePublisher == null) {
             return;
         }
+        // 构建查询条件
         QueryWrapper<MqEventRecord> wrapper = new QueryWrapper<>();
+        // 查询 PENDING_RETRY 状态且 next_retry_time <= now 的记录（最多20条）
         wrapper.eq("event_status", "PENDING_RETRY")
                 .le("next_retry_time", LocalDateTime.now())
                 .last("limit 20");
+        // 遍历记录，尝试重新发送
         List<MqEventRecord> records = mqEventRecordMapper.selectList(wrapper);
         for (MqEventRecord record : records) {
             try {
+                // 尝试重新发送消息
                 boolean success = rocketMqReliablePublisher.publish(
                         record.getEventType(),
                         record.getDestination(),
