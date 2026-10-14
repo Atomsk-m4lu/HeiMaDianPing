@@ -6,10 +6,20 @@ Prometheus 指标报告生成器
 import sys, json, os
 from datetime import datetime, timezone, timedelta
 from urllib.request import urlopen, Request
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 CST = timezone(timedelta(hours=8))
 PROM = "http://localhost:9090"
+
+# 请求前置校验（防 SSRF 模式）：仅允许 http/https，且主机在白名单内
+ALLOWED_PROM_HOSTS = {"localhost", "127.0.0.1", "::1", "192.168.100.128"}
+
+def _assert_safe_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"unsupported scheme: {parsed.scheme!r}")
+    if parsed.hostname not in ALLOWED_PROM_HOSTS:
+        raise ValueError(f"host not allowed: {parsed.hostname!r}")
 
 METRICS = [
     # Gauge metrics (query_range)
@@ -37,6 +47,7 @@ def query_range(query, start, end, step="1s"):
     params = {"query": query, "start": start, "end": end, "step": step}
     url = f"{PROM}/api/v1/query_range?{urlencode(params)}"
     try:
+        _assert_safe_url(url)
         req = Request(url)
         with urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
@@ -64,6 +75,7 @@ def query_instant(query, timestamp):
     params = {"query": query, "time": timestamp}
     url = f"{PROM}/api/v1/query?{urlencode(params)}"
     try:
+        _assert_safe_url(url)
         req = Request(url)
         with urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
@@ -123,7 +135,10 @@ def main():
 
     start = sys.argv[1]
     end = sys.argv[2]
-    out_dir = sys.argv[3]
+    out_dir = os.path.abspath(sys.argv[3])
+    _base = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
+    if not (out_dir == _base or out_dir.startswith(_base + os.sep)):
+        sys.exit(f"output_dir 必须位于脚本目录之下: {out_dir}")
     os.makedirs(out_dir, exist_ok=True)
 
     start_dt = datetime.fromtimestamp(int(start) / 1000, tz=CST)

@@ -1,8 +1,9 @@
 #!/bin/bash
 # ============================================================================
 # 秒杀Plus压测准备脚本
-# 用法: ./prepare_seckill_test.sh [用户数] [券ID]
+# 用法: MYSQL_PASS=<密码> ./prepare_seckill_test.sh [用户数] [券ID]
 # 默认: 1000用户, 券ID=13
+# 依赖: 环境变量 MYSQL_PASS 必须已设置（凭据不落盘、不进仓库）
 # ============================================================================
 set -e
 
@@ -10,7 +11,7 @@ USER_COUNT=${1:-1000}
 VOUCHER_ID=${2:-13}
 MYSQL_HOST="127.0.0.1"
 MYSQL_USER="root"
-MYSQL_PASS="123456"
+MYSQL_PASS="${MYSQL_PASS:?MYSQL_PASS 未设置：请先 export MYSQL_PASS=<密码> 再运行}"
 MYSQL_DB="dingping"
 REDIS_CLI="redis-cli"
 CSV_FILE="/tmp/seckill_tokens.csv"
@@ -39,7 +40,7 @@ echo "  旧订单: ${OLD_ORDERS:-0}  对账日志: ${OLD_LOGS:-0}  核验任务:
 mysql -u"${MYSQL_USER}" -p"${MYSQL_PASS}" -D "${MYSQL_DB}" -e "
   DELETE FROM tb_voucher_order WHERE voucher_id = ${VOUCHER_ID};
   DELETE FROM tb_voucher_reconcile_log WHERE voucher_id = ${VOUCHER_ID};
-  DELETE FROM tb_order_create_verify_task;
+  DELETE FROM tb_order_create_verify_task WHERE voucher_id = ${VOUCHER_ID};
   DELETE FROM tb_order_create_recovery_task WHERE voucher_id = ${VOUCHER_ID};
 " 2>/dev/null
 
