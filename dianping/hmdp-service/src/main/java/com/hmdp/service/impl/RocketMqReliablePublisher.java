@@ -48,12 +48,32 @@ public class RocketMqReliablePublisher {
      * @return true=发送成功，false=发送失败已DB兜底
      */
     public boolean publish(String eventType, String destination, String payload) {
+        return doPublish(eventType, destination, payload, true);
+    }
+
+    /**
+     * 重试场景专用：失败不重复落库。
+     *
+     * <p>MqEventRetryJob 重发的记录本身就来自 tb_mq_event_record，
+     * 若重发失败再走 persistFailure 会为同一条消息插入一条新记录 ——
+     * Broker 故障期间记录数会随每轮重试成倍增长（重试风暴放大表体积）。
+     * 因此重试路径失败只返回 false，由调用方（Job）维护原记录的状态与计数。</p>
+     *
+     * @return true=发送成功；false=发送失败且不落库
+     */
+    public boolean resend(String eventType, String destination, String payload) {
+        return doPublish(eventType, destination, payload, false);
+    }
+
+    private boolean doPublish(String eventType, String destination, String payload, boolean persistOnFailure) {
         try {
             rocketMQTemplate.syncSend(destination, MessageBuilder.withPayload(payload).build());
             return true;
         } catch (Exception e) {
-            log.error("rocketmq publish failed, destination={}", destination, e);
-            persistFailure(eventType, destination, payload, e);
+            log.error("rocketmq publish failed, destination={}, persistOnFailure={}", destination, persistOnFailure, e);
+            if (persistOnFailure) {
+                persistFailure(eventType, destination, payload, e);
+            }
             return false;
         }
     }

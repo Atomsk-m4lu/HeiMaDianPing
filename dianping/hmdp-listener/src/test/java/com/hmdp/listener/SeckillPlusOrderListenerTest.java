@@ -6,6 +6,7 @@ import com.hmdp.entity.VoucherOrder;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
 import com.hmdp.service.impl.OrderCreateRecoveryService;
+import com.hmdp.service.impl.RollbackFailureService;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -13,6 +14,7 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +37,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldCreateVoucherOrder() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.CREATED);
 
@@ -48,7 +50,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldRollbackAndNotThrowWhenStockSyncFails() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.OUT_OF_STOCK);
 
@@ -66,7 +68,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldIgnoreDuplicateAndNotRollback() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message)).thenReturn(VoucherOrderCreateResult.DUPLICATE);
 
@@ -80,7 +82,7 @@ class SeckillPlusOrderListenerTest {
     void onMessage_shouldThrowWhenDbExceptionOccursBeforeMqRetryThreshold() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         SeckillVoucherOrderMessage message = message();
         when(voucherOrderService.createVoucherOrderPlus(message))
                 .thenThrow(new RuntimeException("Connection pool exhausted"));
@@ -97,14 +99,14 @@ class SeckillPlusOrderListenerTest {
         when(voucherOrderService.createVoucherOrderPlus(any())).thenReturn(VoucherOrderCreateResult.CREATED);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));
         MessageExt msg2 = createMockMessage(json(2L, 2L, 2L, "t2"));
         MessageExt msg3 = createMockMessage(json(3L, 3L, 3L, "t3"));
 
-        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(List.of(msg1, msg2, msg3), null);
+        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(Arrays.asList(msg1, msg2, msg3), null);
 
         assertEquals(ConsumeConcurrentlyStatus.CONSUME_SUCCESS, status);
         verify(voucherOrderService, times(3)).createVoucherOrderPlus(any());
@@ -119,14 +121,14 @@ class SeckillPlusOrderListenerTest {
                 .thenReturn(VoucherOrderCreateResult.CREATED);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));
         MessageExt msg2 = createMockMessage(json(2L, 2L, 2L, "t2"));
         MessageExt msg3 = createMockMessage(json(3L, 3L, 3L, "t3"));
 
-        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(List.of(msg1, msg2, msg3), null);
+        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(Arrays.asList(msg1, msg2, msg3), null);
 
         assertEquals(ConsumeConcurrentlyStatus.CONSUME_SUCCESS, status);
         verify(voucherOrderService, times(3)).createVoucherOrderPlus(any());
@@ -150,14 +152,14 @@ class SeckillPlusOrderListenerTest {
         });
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
 
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         MessageListenerConcurrently batchListener = captureBatchListener(listener);
 
         MessageExt msg1 = createMockMessage(json(1L, 1L, 1L, "t1"));
         MessageExt msg2 = createMockMessage(json(2L, 2L, 2L, "t2"));
         MessageExt msg3 = createMockMessage(json(3L, 3L, 3L, "t3"));
 
-        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(List.of(msg1, msg2, msg3), null);
+        ConsumeConcurrentlyStatus status = batchListener.consumeMessage(Arrays.asList(msg1, msg2, msg3), null);
 
         assertEquals(ConsumeConcurrentlyStatus.CONSUME_SUCCESS, status);
         assertTrue(maxConcurrent.get() >= 2, "expected at least 2 concurrent, actual=" + maxConcurrent.get());

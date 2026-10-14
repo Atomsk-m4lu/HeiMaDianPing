@@ -83,3 +83,12 @@ seckill:
     scan-delay-minutes: 3
     compensation-max-retry-count: 5
     compensation-retry-delay-seconds: 30
+  # ===== 批次1 ①：秒杀入口滑动窗口限流（可开关，供压测对比实验） =====
+  rate-limit:
+    sliding-window:
+      enabled: true
+      window-ms: 1000
+      max-requests: 5
+  # ===== 批次1 ⑤：本地消息表重试上限（达到后转 FAILED 终态，人工介入） =====
+  mq-event:
+    max-retry-count: 5

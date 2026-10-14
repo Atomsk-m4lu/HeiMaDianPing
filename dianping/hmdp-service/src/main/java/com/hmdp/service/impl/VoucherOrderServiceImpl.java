@@ -113,6 +113,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired(required = false)
     private OrderCreateVerificationService orderCreateVerificationService;
 
+    /** 回滚失败记录服务（同包，回滚失败时落库 + 告警，批次1 ④） */
+    @Resource
+    private RollbackFailureService rollbackFailureService;
+
     /** 原始秒杀Lua脚本（seckill.lua） */
     private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
     /** 秒杀Plus Lua脚本（seckill_plus.lua）：包含请求去重 + 库存扣减 + 一人一单 + Redis trace */
@@ -268,8 +272,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                     payload
             );
             if (!sent) {
-                // MQ发送失败 → 回滚Redis库存，用户可重试
-                rollbackSeckillVoucherPlus(order);
+                // MQ发送失败 → 回滚Redis库存，用户可重试；回滚失败落库告警，不改变用户可重试语义
+                try {
+                    rollbackSeckillVoucherPlus(order);
+                } catch (Exception rollbackEx) {
+                    rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
+                            order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
+                }
                 return Result.fail("下单人数过多，请重试");
             }
 
@@ -289,7 +298,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.ok(orderId);
         } catch (Exception e) {
             log.error("send seckill plus order message failed, orderId={}", orderId, e);
-            rollbackSeckillVoucherPlus(order);
+            try {
+                rollbackSeckillVoucherPlus(order);
+            } catch (Exception rollbackEx) {
+                rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
+                        order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
+            }
             return Result.fail("下单人数过多，请重试");
         }
     }

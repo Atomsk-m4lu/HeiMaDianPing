@@ -7,6 +7,7 @@ import com.hmdp.entity.VoucherOrder;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.VoucherOrderCreateResult;
 import com.hmdp.service.impl.OrderCreateRecoveryService;
+import com.hmdp.service.impl.RollbackFailureService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -59,6 +60,7 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
 
     private final IVoucherOrderService voucherOrderService;
     private final OrderCreateRecoveryService orderCreateRecoveryService;
+    private final RollbackFailureService rollbackFailureService;
 
     /** 订单处理线程池 — 核心线程数=CPU核数，最大=2倍CPU核数，有界队列1024，拒绝策略CallerRuns */
     private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
@@ -163,8 +165,15 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
         // → 必须把 Redis 里扣掉的库存 + 一人一单标记 + DEDUCT 日志回滚掉
         //   否则 Redis 库存会被"幽灵单"永久占着，真实用户买不到
         if (result == VoucherOrderCreateResult.OUT_OF_STOCK) {
-            voucherOrderService.rollbackSeckillVoucherPlus(order);
-            log.warn("seckill plus order out of stock, rolled back, orderId={}", order.getId());
+            // 回滚失败不再向上抛：落 tb_rollback_failure_log + 告警，由对账扫描兜底（批次1 ④）
+            try {
+                voucherOrderService.rollbackSeckillVoucherPlus(order);
+                log.warn("seckill plus order out of stock, rolled back, orderId={}", order.getId());
+            } catch (Exception rollbackEx) {
+                log.error("seckill plus rollback failed on out-of-stock, orderId={}", order.getId(), rollbackEx);
+                rollbackFailureService.record(RollbackFailureService.SOURCE_LISTENER,
+                        order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
+            }
             return;
         }
         // 分支 2：rollbackSeckillVoucherPlus 自己也失败了（比如 Lua 脚本执行异常）

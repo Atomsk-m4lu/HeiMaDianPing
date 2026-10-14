@@ -5,6 +5,7 @@ import com.hmdp.entity.MqEventRecord;
 import com.hmdp.mapper.MqEventRecordMapper;
 import com.hmdp.service.impl.RocketMqReliablePublisher;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -19,11 +20,13 @@ import java.util.List;
  * <pre>{@code
  *   每30秒 → 查询 PENDING_RETRY 且 next_retry_time <= now 的记录（最多20条）
  *     ├─ 重新发送成功 → event_status = SENT
- *     └─ 再次失败 → retryCount + 1, next_retry_time = now + 30秒
+ *     ├─ 再次失败且未达上限 → retryCount + 1, next_retry_time = now + 30秒
+ *     └─ 再次失败且达到上限 → event_status = FAILED（终态）
  * }</pre></p>
  *
- * <p>重试策略：固定30秒间隔，不做指数退避（秒杀场景对延迟敏感）。
- * 如果长期失败，人工查看 MqEventRecord 表处理。</p>
+ * <p>重试策略：固定30秒间隔，不做指数退避（秒杀场景对延迟敏感）；
+ * 上限默认 5 次（seckill.mq-event.max-retry-count 可配），达到上限转 FAILED 终态、
+ * 不再被扫描，等待人工排查（与恢复任务转 MANUAL_REVIEW 同一思路，批次1 ⑤）。</p>
  */
 @Component
 @Slf4j
@@ -36,6 +39,16 @@ public class MqEventRetryJob {
     /** 可靠消息发布器 —— 将待重试记录重新发送到 RocketMQ */
     @Resource
     private RocketMqReliablePublisher rocketMqReliablePublisher;
+
+    /** 最大重试次数：达到后转 FAILED 终态等待人工处理（默认 5，可配置） */
+    @Value("${seckill.mq-event.max-retry-count:5}")
+    private int maxRetryCount = 5;
+
+    /** 待重试状态 */
+    static final String STATUS_PENDING_RETRY = "PENDING_RETRY";
+
+    /** 重试耗尽终态（等待人工介入，不再被 Job 扫描） */
+    static final String STATUS_FAILED = "FAILED";
 
     /**
      * 扫描并重试 MQ 发送失败的事件
@@ -67,8 +80,8 @@ public class MqEventRetryJob {
         List<MqEventRecord> records = mqEventRecordMapper.selectList(wrapper);
         for (MqEventRecord record : records) {
             try {
-                // 尝试重新发送消息
-                boolean success = rocketMqReliablePublisher.publish(
+                // 尝试重新发送消息（resend：失败不重复落库，状态由本条记录承载，避免重试风暴放大表体积）
+                boolean success = rocketMqReliablePublisher.resend(
                         record.getEventType(),
                         record.getDestination(),
                         record.getPayload()
@@ -80,15 +93,33 @@ public class MqEventRetryJob {
                     mqEventRecordMapper.updateById(record);
                     continue;
                 }
-                // 再次失败 → 增加重试计数，推迟到 30 秒后再试
-                record.setRetryCount(record.getRetryCount() == null ? 1 : record.getRetryCount() + 1);
-                record.setNextRetryTime(LocalDateTime.now().plusSeconds(30));
+                // 再次失败 → 增加重试计数；未达上限 30 秒后再试，达到上限转 FAILED 终态
+                int nextRetryCount = (record.getRetryCount() == null ? 0 : record.getRetryCount()) + 1;
+                record.setRetryCount(nextRetryCount);
+                record.setLastError("resend failed at attempt " + nextRetryCount);
                 record.setUpdateTime(LocalDateTime.now());
+                if (STATUS_FAILED.equals(resolveStatusAfterFailure(nextRetryCount))) {
+                    record.setEventStatus(STATUS_FAILED);
+                    log.error("mq event retry exhausted, marked FAILED for manual handling, id={}, retryCount={}",
+                            record.getId(), nextRetryCount);
+                } else {
+                    record.setNextRetryTime(LocalDateTime.now().plusSeconds(30));
+                }
                 mqEventRecordMapper.updateById(record);
             } catch (Exception e) {
                 // 单条异常不影响其他记录，只打 WARN 等待下轮重试
                 log.warn("mq event retry failed, id={}", record.getId(), e);
             }
         }
+    }
+
+    /**
+     * 根据新的重试次数判定事件状态 —— 抽成独立方法便于单测覆盖终态规则。
+     *
+     * @param retryCount 本次失败后的累计重试次数
+     * @return 达到上限返回 FAILED（终态），否则返回 PENDING_RETRY
+     */
+    String resolveStatusAfterFailure(int retryCount) {
+        return retryCount >= maxRetryCount ? STATUS_FAILED : STATUS_PENDING_RETRY;
     }
 }

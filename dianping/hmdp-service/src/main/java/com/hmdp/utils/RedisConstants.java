@@ -26,4 +26,7 @@ public class RedisConstants {
 
     public static final String SHOP_TYPE_KEY = "shop_type:";
     public static final Long SHOP_TYPE_LONG=10L;
+
+    /** 秒杀入口滑动窗口限流：rate:sw:seckill:{userId}（批次1 ①） */
+    public static final String SECKILL_RATE_LIMIT_KEY = "rate:sw:seckill:";
 }

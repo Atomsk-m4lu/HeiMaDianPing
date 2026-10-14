@@ -3,6 +3,7 @@ package com.hmdp.listener;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.service.impl.OrderCreateRecoveryService;
+import com.hmdp.service.impl.RollbackFailureService;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +24,7 @@ class SeckillPlusOrderListenerRecoveryTest {
     void processMessage_shouldThrowDuringEarlyMqRetryForInfrastructureFailure() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         MessageExt msg = mock(MessageExt.class);
         when(msg.getBody()).thenReturn(json().getBytes(StandardCharsets.UTF_8));
         when(msg.getReconsumeTimes()).thenReturn(1);
@@ -40,7 +41,7 @@ class SeckillPlusOrderListenerRecoveryTest {
     void processMessage_shouldCreateRecoveryTaskAfterMqRetryThreshold() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
-        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService);
+        SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class));
         MessageExt msg = mock(MessageExt.class);
         when(msg.getBody()).thenReturn(json().getBytes(StandardCharsets.UTF_8));
         when(msg.getReconsumeTimes()).thenReturn(3);
