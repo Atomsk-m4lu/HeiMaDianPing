@@ -1,0 +1,1635 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JVM 巡检报告 · hmdp-mq · 2026-10-14</title>
+<style>
+:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, "Segoe UI", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  -webkit-app-region: no-drag;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px;
+  padding: 0;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  width: 100%;
+  min-height: 28px;
+  justify-content: flex-start;
+  padding: 4px 8px;
+  font-size: var(--font-size-small);
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type="file"]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible,
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+</style>
+<style>
+body { margin: 0; padding: 24px 16px 40px; background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+#jvm-patrol-20261014 { max-width: 1080px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="jvm-patrol-20261014">
+<style>
+  #jvm-patrol-20261014 { display: flex; flex-direction: column; gap: 14px; }
+  #jvm-patrol-20261014 h2 { margin: 0; }
+  #jvm-patrol-20261014 h3 { margin: 0; }
+  #jvm-patrol-20261014 .jp-sec { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  #jvm-patrol-20261014 .jp-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 18px; margin: 0; }
+  #jvm-patrol-20261014 .jp-kv dt { color: var(--muted-foreground); font-size: var(--font-size-small); }
+  #jvm-patrol-20261014 .jp-kv dd { margin: 2px 0 10px; }
+  #jvm-patrol-20261014 .jp-muted { color: var(--muted-foreground); }
+  #jvm-patrol-20261014 .jp-red { color: var(--red); }
+  #jvm-patrol-20261014 .jp-green { color: var(--green); }
+  #jvm-patrol-20261014 .chain { border-left: 3px solid var(--red); padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+  #jvm-patrol-20261014 .chain-step { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+  #jvm-patrol-20261014 .chain-badge { align-self: flex-start; display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 500; font-size: var(--font-size-small); background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+  #jvm-patrol-20261014 .chain-step.root .chain-badge { background: var(--red); color: var(--primary-foreground); }
+  #jvm-patrol-20261014 .chain-arrow { color: var(--red); line-height: 1; }
+  #jvm-patrol-20261014 .chain-action { color: var(--muted-foreground); font-size: var(--font-size-small); }
+  #jvm-patrol-20261014 .chain-finding { font-weight: 500; }
+  #jvm-patrol-20261014 pre { margin: 2px 0 0; padding: 10px 12px; background: var(--muted); border-radius: 8px; overflow-x: auto; font-family: var(--font-mono); font-size: var(--font-size-small); line-height: 1.5; color: var(--foreground); }
+  #jvm-patrol-20261014 .ev-label { color: var(--orange); font-size: var(--font-size-small); }
+  #jvm-patrol-20261014 .chain-judgment { color: var(--orange); font-style: italic; font-size: var(--font-size-small); }
+  #jvm-patrol-20261014 details { padding: 6px 0; }
+  #jvm-patrol-20261014 details summary { color: var(--muted-foreground); }
+  #jvm-patrol-20261014 .conf-track { width: 170px; max-width: 42vw; }
+  #jvm-patrol-20261014 ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+</style>
+
+<h2>JVM 巡检报告 · 黑马点评 hmdp-mq</h2>
+<div class="jp-muted">采集 2026-10-14 21:47 – 22:17 · 基线 + 故障演练 2 轮 + 恢复验证 · 工具 Arthas 4.3.5 + jstack/jstat</div>
+
+<section class="jp-sec">
+  <dl class="jp-kv">
+    <div><dt>巡检对象</dt><dd>dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar</dd></div>
+    <div><dt>进程</dt><dd>PID 7692（基线/演练）→ PID 3756（重启恢复验证后）</dd></div>
+    <div><dt>JVM</dt><dd>Amazon Corretto 1.8.0_504（OpenJDK 64-Bit Server VM 25.504-b01）</dd></div>
+    <div><dt>运行环境</dt><dd>Windows 11 · 16 核 · 本地 Mode A（中间件在 VM 192.168.100.128）</dd></div>
+    <div><dt>启动时间</dt><dd>2026-10-14 21:45:57（巡检时已运行 ≈ 75s）</dd></div>
+    <div><dt>巡检方向</dt><dd>full（jstat / dashboard / memory / jvm / jmap -histo:live / thread×4 / classloader）</dd></div>
+  </dl>
+</section>
+
+<section class="jp-sec">
+  <h3>健康总览（基线）</h3>
+  <div class="viz-grid">
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">CPU</span><span class="viz-stat-value">0.0%</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">thread -n 5 全部空闲；LOAD-AVERAGE -1（Windows 不适用）</div>
+    </div>
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">内存</span><span class="viz-stat-value">2.4%</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">heap 166M / max 7095M；Old 62M；[B（byte[]）仅 2.9MB 排第 5</div>
+    </div>
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">GC</span><span class="viz-stat-value">9.9ms</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">YGC 10 次均值 9.9ms；FGC 3 次均值 43.7ms；PS 收集器</div>
+    </div>
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">线程</span><span class="viz-stat-value">252</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">BLOCKED 0；无死锁；100 空闲 exec = min-spare 配置值</div>
+    </div>
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">Metaspace</span><span class="viz-stat-value">92M</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">committed 97M（无上限）；17161 类已加载 / 58 已卸载</div>
+    </div>
+    <div class="card">
+      <div class="viz-stat"><span class="text-small">类加载</span><span class="viz-stat-value">11259</span></div>
+      <div class="text-small jp-green">🟢 正常</div>
+      <div class="text-small">LaunchedURLClassLoader 单实例；DelegatingClassLoader 292（反射膨胀，正常）</div>
+    </div>
+  </div>
+  <div class="jp-muted text-small">基线六个维度无风险项。下方两个风险点来自<b>故意注入</b>的故障演练（开关默认关闭、已全部复位），用于验证 Arthas「症状 → 定位 → 代码根因」诊断链路的完整性。</div>
+</section>
+
+<section class="jp-sec">
+  <h3>风险点 1 · AB-BA 环状死锁 <span class="jp-red">（演练注入，开关已关闭并验证恢复）</span></h3>
+  <div class="viz-row">
+    <span class="text-small">置信度 100%</span>
+    <div class="conf-track"><div class="progress" role="progressbar" aria-label="置信度" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:100%"></div></div></div>
+  </div>
+
+  <div class="chain">
+    <div class="chain-step">
+      <span class="chain-badge">现象</span>
+      <div class="chain-action">21:53 并发双请求（userId 1014 偶 / 1015 奇）打 /voucher-order/seckill-plus/17</div>
+      <div class="chain-finding">两个请求挂起不返回（4s 未完成）；BLOCKED 线程从 0 → 2，其余指标无变化</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>"http-nio-8081-exec-29" / "http-nio-8081-exec-30" 双双 WaitingForActivation 超 4s
+thread --state BLOCKED → Threads Total: 279, RUNNABLE: 69, BLOCKED: 2, WAITING: 158</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">自动检出</span>
+      <div class="chain-action">thread -b（检测最阻塞线程并自动还原死锁环）</div>
+      <div class="chain-finding">exec-29 BLOCKED 等 A 锁（被 exec-30 持有）；它自身持有 B 锁且 blocked 另一线程 → AB-BA 环成立</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>"http-nio-8081-exec-29" Id=165 BLOCKED on java.lang.Object@2e059b69 owned by "http-nio-8081-exec-30" Id=166
+    at com.hmdp.service.impl.VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:253)
+    -  blocked on java.lang.Object@2e059b69
+    -  locked java.lang.Object@369cc0d4 <---- but blocks 1 other threads!</pre></div>
+      <div class="chain-judgment">→ 判断: 单侧证据成立，还需反向确认持锁关系</div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">持锁确认</span>
+      <div class="chain-action">thread 166（查看另一线程完整栈）</div>
+      <div class="chain-finding">exec-30 BLOCKED 等 B 锁（被 exec-29 持有）——与 exec-29 恰好互为等待方，环闭合</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>"http-nio-8081-exec-30" Id=166 BLOCKED on java.lang.Object@369cc0d4 owned by "http-nio-8081-exec-29" Id=165
+    at com.hmdp.service.impl.VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:248)
+    -  blocked on java.lang.Object@369cc0d4</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">JVM 判定</span>
+      <div class="chain-action">jstack 7692（JVM 级死锁裁定）</div>
+      <div class="chain-finding">"Found one Java-level deadlock" —— 两线程互等 monitor（0x…f60 ↔ 0x…f70），死锁被 JVM 官方确认</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>Found one Java-level deadlock:
+=============================
+"http-nio-8081-exec-30":
+  waiting to lock monitor 0x000001e3166342b8 (object 0x00000005ced57f60, a java.lang.Object),
+  which is held by "http-nio-8081-exec-29"
+"http-nio-8081-exec-29":
+  waiting to lock monitor 0x000001e316632528 (object 0x00000005ced57f70, a java.lang.Object),
+  which is held by "http-nio-8081-exec-30"</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">代码确认</span>
+      <div class="chain-action">jad com.hmdp.service.impl.VoucherOrderServiceImpl（反编译运行中的字节码）</div>
+      <div class="chain-finding">偶数 userId 走 A→B（:246→:248），奇数走 B→A（:251→:253）——同一对锁因分支不同而顺序相反</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>/*243*/ if (SeckillBugFlags.DEADLOCK.get()) {
+/*245*/     if (userId % 2L == 0L) {
+/*246*/         suspect = BUG_LOCK_A; synchronized (suspect) {
+/*247*/             Thread.sleep(50L);
+/*248*/             object = BUG_LOCK_B; synchronized (object) {}
+/*251*/     suspect = BUG_LOCK_B; synchronized (suspect) {
+/*252*/         Thread.sleep(50L);
+/*253*/         synchronized (BUG_LOCK_A) {}</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step root">
+      <span class="chain-badge">根因</span>
+      <div class="chain-finding">锁顺序不一致导致 AB-BA 环状死锁：两个线程各自持有对方需要的锁并永久等待（sleep(50) 放大竞争窗口）。位于 VoucherOrderServiceImpl.java:243–255（SeckillBugFlags.DEADLOCK 注入点，模拟"跨券库存一致性校验"）。</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="chain-finding">业务影响</div>
+    <ul>
+      <li>2 个 Tomcat worker 线程永久占用（800 上限中的 2，泄漏不回收，直至重启）；对应 2 笔用户请求永久挂起。</li>
+      <li>2 笔 Redis 预扣悬空：库存 100→98、下单集 +2 用户、trace +2，但 DB 无对应订单（线程死在 MQ 发布之前）。</li>
+    </ul>
+    <div class="chain-finding">修复建议</div>
+    <ul>
+      <li>全局统一加锁顺序（按锁对象稳定 ID 排序后依次获取）；或用 tryLock(timeout) 超时放弃并回退。</li>
+      <li>代码审查规则：任何"跨资源/跨券"校验中，禁止同一对锁出现 A→B 与 B→A 并存。</li>
+      <li>生产监控：<code>thread --state BLOCKED</code> 持续 &gt;0 告警；<code>thread -b</code> 周期巡检。</li>
+    </ul>
+    <div class="jp-muted text-small">恢复验证：开关关闭 + 重启后 → DEADLOCK-COUNT 0、BLOCKED 0、thread -b 未检出（22:16 复测）。</div>
+  </div>
+</section>
+
+<section class="jp-sec">
+  <h3>风险点 2 · CPU 热点（朴素递归斐波那契） <span class="jp-red">（演练注入，开关已关闭并验证恢复）</span></h3>
+  <div class="viz-row">
+    <span class="text-small">置信度 95%</span>
+    <div class="conf-track"><div class="progress" role="progressbar" aria-label="置信度" aria-valuenow="95" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width:95%"></div></div></div>
+  </div>
+
+  <div class="chain">
+    <div class="chain-step">
+      <span class="chain-badge">现象</span>
+      <div class="chain-action">22:08 注入后压力窗口：16 个新用户错峰 1.5s 持续打秒杀接口</div>
+      <div class="chain-finding">thread -n 5 捕获单线程 cpuUsage 99.14% RUNNABLE；dashboard 1s 采样两个 exec 线程 65%/42% CPU</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>"http-nio-8081-exec-84" Id=220 cpuUsage=99.14% deltaTime=203ms time=406ms RUNNABLE
+dashboard 采样:  http-nio-8081-exec-  WAITIN 65.18% 0.656 0:0.65
+                http-nio-8081-exec-  RUNNAB 42.02% 0.421 0:0.42
+                heap 556M / 7.85%（燃烧期间瞬时；YGC 正常吸收，Old 区 53M 稳定）</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">热点定位</span>
+      <div class="chain-action">thread -n 5 读取热点线程完整栈</div>
+      <div class="chain-finding">栈顶 30+ 层 fibonacciWarmup(:442) 自递归，入口 seckillVoucherPlus(:236) —— 秒杀主链路内嵌 CPU 密集计算</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>    at ...VoucherOrderServiceImpl.fibonacciWarmup(VoucherOrderServiceImpl.java:442)   ×30+
+    at ...VoucherOrderServiceImpl.fibonacciWarmup(VoucherOrderServiceImpl.java:442)
+    at ...VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:236)
+    ... (Tomcat → DispatcherServlet → Controller 调用链省略)</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step">
+      <span class="chain-badge">代码确认</span>
+      <div class="chain-action">jad / 源码核对</div>
+      <div class="chain-finding">fibonacciWarmup(42) 为无记忆化朴素递归 —— 计算 fib(42) 需约 8.7 亿次函数调用；每次请求在同步链路内执行完整个计算</div>
+      <div><span class="ev-label">📎 证据:</span>
+      <pre>/*234*/ if (SeckillBugFlags.CPU_SPIN.get()) {
+/*236*/     VoucherOrderServiceImpl.fibonacciWarmup(42);
+
+/** 递归斐波那契 — CPU密集型，用于模拟"热点数据预热" */
+/*440*/ private static long fibonacciWarmup(int n) {
+/*441*/     if (n <= 1) return n;
+/*442*/     return fibonacciWarmup(n - 1) + fibonacciWarmup(n - 2);
+        }</pre></div>
+    </div>
+    <div class="chain-arrow">↓</div>
+    <div class="chain-step root">
+      <span class="chain-badge">根因</span>
+      <div class="chain-finding">秒杀主链路内嵌 O(φⁿ) 指数级 CPU 计算（"热点数据预热"误用）。位于 VoucherOrderServiceImpl.java:234–236（SeckillBugFlags.CPU_SPIN 注入点），方法体在 :439–443。</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="chain-finding">业务影响</div>
+    <ul>
+      <li>请求 RT 被无用计算拖长（同步等待 CPU 燃烧完成）；并发放大时 CPU 核心将被耗尽、吞吐坍塌（本次 16 笔错峰请求全部 200 返回，未被击穿）。</li>
+      <li>燃烧期间堆瞬时 556M（旧生代 53M 稳定，YGC 正常吸收），未引发 OOM——风险集中在 CPU 而非内存。</li>
+    </ul>
+    <div class="chain-finding">修复建议</div>
+    <ul>
+      <li>将重计算移出请求线程：启动预热 / 定时任务 / 异步计算 + 缓存结果。</li>
+      <li>若必须计算，改迭代 + 记忆化（O(n)）或查表。</li>
+      <li>监控：<code>thread -n 5</code> cpuUsage &gt;80% 持续告警 + dashboard GC 面板联动排查（区分业务热点与 GC 消耗）。</li>
+    </ul>
+  </div>
+</section>
+
+<section class="jp-sec">
+  <h3>基线指标 vs 阈值</h3>
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr><th>指标</th><th>实测（基线）</th><th>阈值</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>线程最高 %CPU</td><td>0.0%（thread -n 5）</td><td>&lt;30%</td><td>🟢</td></tr>
+        <tr><td>死锁 / BLOCKED</td><td>未检出 / 0</td><td>无 / 0</td><td>🟢</td></tr>
+        <tr><td>线程总数</td><td>252（+Arthas 会话后 270–304）</td><td>&lt;1000</td><td>🟢</td></tr>
+        <tr><td>Heap 使用率</td><td>166M / max 7095M ≈ 2.4%</td><td>&lt;70%</td><td>🟢</td></tr>
+        <tr><td>Old Gen 使用率</td><td>62M / max 5321M ≈ 1.2%</td><td>&lt;70%</td><td>🟢</td></tr>
+        <tr><td>FGC 频率 / 耗时</td><td>窗口内 3–4 次 / 均值 43.7ms</td><td>稳定 / &lt;500ms</td><td>🟢</td></tr>
+        <tr><td>YGC 均值</td><td>9.9ms（10 次）</td><td>&lt;30ms</td><td>🟢</td></tr>
+        <tr><td>Survivor S0 使用率</td><td>98.4%（单点采样）</td><td>&lt;80%</td><td>🟡</td></tr>
+        <tr><td>Metaspace</td><td>92M / 97M committed（无上限，弹性扩容）</td><td>无硬上限约束</td><td>🟢</td></tr>
+        <tr><td>类加载 / 卸载</td><td>17161 加载 / 58 卸载</td><td>具备卸载能力</td><td>🟢</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="jp-muted text-small">🟡 说明：S0 98.4% 为单点采样——PS（Parallel Scavenge）收集器自适应 survivor 尺寸，YGC 后存活对象复制填满 survivor 属设计行为；Old 区仅 1.2%、FGC 不增长，无"对象过早晋升"证据，判定无需处理，建议压测轮复测。</div>
+</section>
+
+<section class="jp-sec">
+  <h3>演练观察与恢复验证</h3>
+  <ul>
+    <li><b>兜底盲区（建议级，本次演练发现）</b>：死锁演练的 2 笔请求死在「Lua 预扣成功 → MQ 发布前」窗口，产生的 Redis 孤立预扣<b>未被自动链路发现</b>——本地消息表、建单校验、恢复任务、对账扫描均以 DB 记录为输入，而该窗口没有任何 DB 落痕（仅 Redis trace hash 有痕）。本次由人工比对 Redis 订单集/库存与 DB 后清理；后续可考虑把 <code>seckill:trace:log:{voucherId}</code> 纳入补充对账输入。</li>
+    <li><b>对账闭环（CPU 演练 16 单）</b>：16 条 DEDUCT 日志 ↔ 16 笔订单 ↔ 16 条建单校验任务，异常任务 0 —— 四级兜底在正常路径上闭环。</li>
+    <li><b>演练残留清理</b>：Redis 库存 82 → 84（与 DB 对齐）、下单集 18 → 16、trace 18 → 16。</li>
+    <li><b>恢复验证</b>：重启（PID 3756，健康检查 12s UP）后 DEADLOCK-COUNT 0 / BLOCKED 0 / thread -b 未检出；7 个注入开关全部为 false、泄漏缓存 0。</li>
+  </ul>
+</section>
+
+<section class="jp-sec">
+  <h3>总结建议</h3>
+  <ul>
+    <li><b>立即处理</b>：无 —— 基线六维全绿，生产路径健康。</li>
+    <li><b>持续观察</b>：① Survivor S0 满载采样点（压测轮复测确认）；② Metaspace committed 增长趋势（92/97M，弹性增长正常）；③ 空闲 exec 线程 100（min-spare=100 配置决定，可评估调低节省内存）。</li>
+    <li><b>无需处理</b>：[C（字符数组）居对象统计第一、DelegatingClassLoader 292 实例（反射膨胀）、PEAK=COUNT（无线程泄漏）。</li>
+  </ul>
+</section>
+
+<section class="jp-sec">
+  <h3>原始数据</h3>
+
+  <details>
+    <summary>jstat -gc ×5（21:47:10，5 次采样无变化）</summary>
+    <pre>S0C    S1C    S0U    S1U      EC       EU        OC         OU       MC     MU    CCSC   CCSU   YGC     YGCT    FGC    FGCT     GCT
+18432.0 22528.0 18144.0 0.0  900608.0 579714.8 335360.0  32495.0  67328.0 63485.8 8960.0 8209.2   10   0.099    3   0.131   0.229
+（×5 次输出一致：采集窗口内无 GC 活动）</pre>
+  </details>
+
+  <details>
+    <summary>memory（21:47:16）+ jvm 线程/类加载块（21:47:18）</summary>
+    <pre>heap              84M   1366M  7095M  1.19%
+ps_eden_space     22M   892M   2605M  0.85%
+ps_survivor_space 0K    22528K 22528K 0.00%
+ps_old_gen        62M   452M   5321M  1.17%
+nonheap           137M  144M   -1     95.57%
+code_cache        34M   34M    240M   14.20%
+metaspace         92M   97M    -1     94.71%
+compressed_class_space 11M 12M 1024M 1.12%
+
+THREAD
+ COUNT                  252
+ DAEMON-COUNT           158
+ PEAK-COUNT             252
+ STARTED-COUNT          260
+ DEADLOCK-COUNT         0
+
+CLASS-LOADING
+ LOADED-CLASS-COUNT     17161
+ TOTAL-LOADED-CLASS-COUNT 17219
+ UNLOADED-CLASS-COUNT   58
+
+PROCESSORS-COUNT 16    LOAD-AVERAGE -1.0（Windows 不适用）
+VM-VERSION 25.504-b01（Amazon Corretto）</pre>
+  </details>
+
+  <details>
+    <summary>dashboard -i 1000 -n 5（21:47:43，堆稳定）</summary>
+    <pre>Memory  used  total  max   usage    GC
+heap    166M  1366M  7095M 2.35%    gc.ps_scavenge.time 114ms
+ps_eden_space    104M  892M   4.00%  gc.ps_marksweep.count 4
+ps_survivor_space 0K   22528K 0.00%  gc.ps_marksweep.time 237ms
+ps_old_gen        62M  452M  1.17%
+nonheap          137M  144M  code_cache 33M</pre>
+  </details>
+
+  <details>
+    <summary>thread -n 5（基线）+ thread --all 前缀分布 + histo Top10 + classloader</summary>
+    <pre>[基线 thread -n 5] 前 5 线程 cpuUsage 全部 0.0%（Reference Handler / Finalizer / Signal Dispatcher / Attach Listener …）
+
+[thread --all 304 线程前缀分布]
+http-nio-8081-exec-……100   （= server.tomcat.threads.min-spare: 100 配置值）
+NettyClientPublicEx……32 · NettyClientWorkerTh……6 · NettyClientSelector……3   （RocketMQ）
+lettuce-eventExecut……16 · lettuce-nioEventLoo……12   （Redis 客户端）
+redisson-netty……32 · RequestHouseKeeping……9 · MQ-AsyncTraceDispatch……5
+arthas-*……15（诊断会话自身）· RocketMQ 后台……20 · 其余零散系统线程
+
+[jmap -histo:live Top10]
+1: [C 118836 / 11.4MB      2: [Ljava.lang.Object; 31795 / 6.9MB
+3: [I 11312 / 3.1MB        4: reflect.Method 34930 / 3.07MB
+5: [B 12732 / 2.9MB（byte[] 仅第 5 —— 无 ThreadLocal 泄漏特征）
+6: String 118217 / 2.8MB   7: MpscArrayQueue 3360 / 2.26MB …
+
+[classloader]
+LaunchedURLClassLoader ×1 / 11259 类 · Bootstrap ×1 / 4424 · ArthasClassloader ×1 / 2362
+DelegatingClassLoader ×292（反射膨胀，正常）· ExtClassLoader ×1 / 66</pre>
+  </details>
+
+  <details>
+    <summary>死锁演练原始输出（21:54–21:55）</summary>
+    <pre>[thread -b]
+"http-nio-8081-exec-29" Id=165 BLOCKED on java.lang.Object@2e059b69 owned by "http-nio-8081-exec-30" Id=166
+    at com.hmdp.service.impl.VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:253)
+    -  blocked on java.lang.Object@2e059b69
+    -  locked java.lang.Object@369cc0d4 <---- but blocks 1 other threads!
+
+[thread 166]
+"http-nio-8081-exec-30" Id=166 BLOCKED on java.lang.Object@369cc0d4 owned by "http-nio-8081-exec-29" Id=165
+    at com.hmdp.service.impl.VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:248)
+    -  blocked on java.lang.Object@369cc0d4
+
+[jstack]
+Found one Java-level deadlock:
+"http-nio-8081-exec-30": waiting to lock monitor 0x…f60（held by exec-29）
+"http-nio-8081-exec-29": waiting to lock monitor 0x…f70（held by exec-30）
+
+[BLOCKED 计数] 0（基线 21:48）→ 2（演练 21:55）→ 0（恢复 22:16）</pre>
+  </details>
+
+  <details>
+    <summary>CPU 演练原始输出（22:08）</summary>
+    <pre>[thread -n 5 燃烧窗口]
+"http-nio-8081-exec-84" Id=220 cpuUsage=99.14% deltaTime=203ms time=406ms RUNNABLE
+    at ...VoucherOrderServiceImpl.fibonacciWarmup(VoucherOrderServiceImpl.java:442)  ×30+
+    at ...VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:236)
+
+[dashboard -i 1000 -n 3]
+http-nio-8081-exec-  WAITIN 65.18% 0.656   http-nio-8081-exec-  RUNNAB 42.02% 0.421
+heap 556M / 1579M / 7.85%    ps_eden 484M    ps_scavenge count 15（YGC 吸收，无 FGC）</pre>
+  </details>
+
+  <details>
+    <summary>恢复验证输出（22:15–22:16，PID 3756）</summary>
+    <pre>[/jvm/seckill-bug/status]
+{"cpuRegex":false,"cpuSpin":false,"memoryLeak":false,"memoryLeakCacheSize":0,
+ "threadlocalLeak":false,"deadlock":false,"threadExplosion":false,"gcAlloc":false}
+
+[health] {"status":"UP"}（启动后 12s）
+[thread -b] No most blocking thread found!
+[thread --state BLOCKED] Total: 271, BLOCKED: 0
+[jvm] THREAD COUNT 272 / DEADLOCK-COUNT 0
+
+[业务对账] DB 库存 84 = Redis 84；订单 16 = 下单集 16 = trace 16；对账异常任务 0</pre>
+  </details>
+</section>
+
+</div>
+
+</body>
+</html>

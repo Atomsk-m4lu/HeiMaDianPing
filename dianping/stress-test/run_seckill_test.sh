@@ -1,8 +1,9 @@
 #!/bin/bash
 # ============================================================================
 # 秒杀Plus压测执行脚本
-# 用法: ./run_seckill_test.sh [并发数] [启动秒数] [券ID]
+# 用法: MYSQL_PASS=<密码> ./run_seckill_test.sh [并发数] [启动秒数] [券ID]
 # 默认: 1000并发, 2s启动, 券ID=13
+# 依赖: 环境变量 MYSQL_PASS 必须已设置（凭据不落盘、不进仓库）
 # ============================================================================
 set -e
 
@@ -15,6 +16,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULT_DIR="${SCRIPT_DIR}/results/${TIMESTAMP}"
 CSV_FILE="/tmp/seckill_tokens.csv"
 JMX_FILE="/tmp/seckill_plus_test.jmx"
+MYSQL_PASS="${MYSQL_PASS:?MYSQL_PASS 未设置：请先 export MYSQL_PASS=<密码> 再运行}"
 
 # 确保结果目录存在
 mkdir -p "${RESULT_DIR}/report"
@@ -181,8 +183,8 @@ echo ""
 REDIS_CLI_CMD=$(which redis-cli 2>/dev/null || echo "redis-cli")
 REDIS_STOCK=$(${REDIS_CLI_CMD} get "seckill:stock:${VOUCHER_ID}" 2>/dev/null || echo "N/A")
 REDIS_ORDERS=$(${REDIS_CLI_CMD} scard "seckill:order:${VOUCHER_ID}" 2>/dev/null || echo "N/A")
-DB_ORDERS=$(mysql -uroot -p123456 -D dingping -N -e "SELECT COUNT(*) FROM tb_voucher_order WHERE voucher_id = ${VOUCHER_ID}" 2>/dev/null || echo "N/A")
-DB_STOCK=$(mysql -uroot -p123456 -D dingping -N -e "SELECT stock FROM tb_seckill_voucher WHERE voucher_id = ${VOUCHER_ID}" 2>/dev/null || echo "N/A")
+DB_ORDERS=$(mysql -u"${MYSQL_USER:-root}" -p"${MYSQL_PASS}" -D dingping -N -e "SELECT COUNT(*) FROM tb_voucher_order WHERE voucher_id = ${VOUCHER_ID}" 2>/dev/null || echo "N/A")
+DB_STOCK=$(mysql -u"${MYSQL_USER:-root}" -p"${MYSQL_PASS}" -D dingping -N -e "SELECT stock FROM tb_seckill_voucher WHERE voucher_id = ${VOUCHER_ID}" 2>/dev/null || echo "N/A")
 
 # 从JMeter summary提取关键指标
 JMETER_SUMMARY=$(grep "summary =" ${RESULT_DIR}/jmeter.log | tail -1)

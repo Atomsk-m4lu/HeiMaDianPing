@@ -1,0 +1,90 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 7692 already using port 3658
+[INFO] Process 7692 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          7692                                                               
+start_time   2026-10-14 21:45:57.189                                            
+current_time 2026-10-14 21:47:15.898                                            
+
+[arthas@7692]$ thread -b | plaintext
+"http-nio-8081-exec-29" Id=165 BLOCKED on java.lang.Object@2e059b69 owned by "http-nio-8081-exec-30" Id=166
+    at com.hmdp.service.impl.VoucherOrderServiceImpl.seckillVoucherPlus(VoucherOrderServiceImpl.java:253)
+    -  blocked on java.lang.Object@2e059b69
+    -  locked java.lang.Object@369cc0d4 <---- but blocks 1 other threads!
+    at com.hmdp.service.impl.VoucherOrderServiceImpl$$FastClassBySpringCGLIB$$ba28bb10.invoke(<generated>)
+    at org.springframework.cglib.proxy.MethodProxy.invoke(MethodProxy.java:218)
+    at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:688)
+    at com.hmdp.service.impl.VoucherOrderServiceImpl$$EnhancerBySpringCGLIB$$5e6f5178.seckillVoucherPlus(<generated>)
+    at com.hmdp.controller.VoucherOrderController.seckillVoucherPlus(VoucherOrderController.java:55)
+    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+    at java.lang.reflect.Method.invoke(Method.java:498)
+    at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:190)
+    at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:138)
+    at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:105)
+    at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:878)
+    at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:792)
+    at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87)
+    at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1040)
+    at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:943)
+    at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1006)
+    at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:909)
+    at javax.servlet.http.HttpServlet.service(HttpServlet.java:652)
+    at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:883)
+    at javax.servlet.http.HttpServlet.service(HttpServlet.java:733)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:227)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:53)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:189)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
+    at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:189)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
+    at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:189)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.springframework.boot.actuate.metrics.web.servlet.WebMvcMetricsFilter.doFilterInternal(WebMvcMetricsFilter.java:97)
+    at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:189)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201)
+    at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:119)
+    at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:189)
+    at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:162)
+    at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:202)
+    at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:97)
+    at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:542)
+    at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:143)
+    at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:92)
+    at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:78)
+    at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:357)
+    at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:374)
+    at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:65)
+    at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:893)
+    at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1707)
+    at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:49)
+    -  locked org.apache.tomcat.util.net.NioEndpoint$NioSocketWrapper@1d672782
+    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+    at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61)
+    at java.lang.Thread.run(Thread.java:750)
+
+    Number of locked synchronizers = 1
+    - java.util.concurrent.ThreadPoolExecutor$Worker@2de366bb
+
+[arthas@7692]$ 

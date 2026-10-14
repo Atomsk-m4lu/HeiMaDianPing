@@ -1,0 +1,151 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 3756 already using port 3658
+[INFO] Process 3756 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          3756                                                               
+start_time   2026-10-14 22:13:14.371                                            
+current_time 2026-10-14 22:16:48.746                                            
+
+[arthas@3756]$ jvm | plaintext
+ RUNTIME                                                                        
+--------------------------------------------------------------------------------
+ MACHINE-NAME           3756@LAPTOP-3LDKAT3N                                    
+ JVM-START-TIME         2026-10-14 22:13:14                                     
+ MANAGEMENT-SPEC-VERSI  1.2                                                     
+ ON                                                                             
+ SPEC-NAME              Java Virtual Machine Specification                      
+ SPEC-VENDOR            Oracle Corporation                                      
+ SPEC-VERSION           1.8                                                     
+ VM-NAME                OpenJDK 64-Bit Server VM                                
+ VM-VENDOR              Amazon.com Inc.                                         
+ VM-VERSION             25.504-b01                                              
+ INPUT-ARGUMENTS        []                                                      
+ CLASS-PATH             dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.ja 
+                        r                                                       
+ BOOT-CLASS-PATH        C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre\lib     
+                        esources.jar;C:\Users\ZZCstupid\.jdks\corretto-1.8.0_50 
+                        4\jre\lib                                               
+                        t.jar;C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre\l 
+                        ib\sunrsasign.jar;C:\Users\ZZCstupid\.jdks\corretto-1.8 
+                        .0_504\jre\lib\jsse.jar;C:\Users\ZZCstupid\.jdks\corret 
+                        to-1.8.0_504\jre\lib\jce.jar;C:\Users\ZZCstupid\.jdks\c 
+                        orretto-1.8.0_504\jre\lib\charsets.jar;C:\Users\ZZCstup 
+                        id\.jdks\corretto-1.8.0_504\jre\lib\jfr.jar;C:\Users\ZZ 
+                        Cstupid\.jdks\corretto-1.8.0_504\jre\classes            
+ LIBRARY-PATH           C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\bin;C:\WIND 
+                        OWS\Sun\Java\bin;C:\WINDOWS\system32;C:\WINDOWS;D:\comp 
+                        uter\VMware\bin\;D:\computer\JDK\bin;C:\Windows\system3 
+                        2;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System 
+                        32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\ 
+                        ;C:\Program Files\dotnet\;C:\Program Files (x86)\NVIDIA 
+                         Corporation\PhysX\Common;C:\WINDOWS\system32;C:\WINDOW 
+                        S;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsP 
+                        owerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program 
+                         Files\NVIDIA Corporation\NVIDIA App\NvDLISR;C:\Program 
+                         Files\Bandizip\;?D:\computer\JDK\bin;D:\computer\Maven 
+                        \apache-maven-3.9.4\bin;D:\computer\MySql\Install\bin\; 
+                        D:\computer\;D:\computer\Git\cmd;D:\computer\WeChat-dev 
+                        tools\微信web开发者工具;C:\Users\ZZCstupid\miniconda3;C:\Users 
+                        \ZZCstupid\miniconda3\Library\mingw-w64\bin;C:\Users\ZZ 
+                        Cstupid\miniconda3\Library\usr\bin;C:\Users\ZZCstupid\m 
+                        iniconda3\Library\bin;C:\Users\ZZCstupid\miniconda3\Scr 
+                        ipts;C:\Users\ZZCstupid\AppData\Local\Microsoft\Windows 
+                        Apps;C:\Users\ZZCstupid\.dotnet\tools;D:\computer\Lingm 
+                        a\bin;D:\computer\VsCode\Microsoft VS Code\bin;C:\Users 
+                        \ZZCstupid\AppData\Roaming\npm;C:\Users\ZZCstupid\AppDa 
+                        ta\Local\Programs\Ollama;D:\computer\ZCode              
+                        esources\tools                                          
+                        ipgrep;D:\computer\ZCode                                
+                        esources\tools\ugrep;.                                  
+                                                                                
+--------------------------------------------------------------------------------
+ CLASS-LOADING                                                                  
+--------------------------------------------------------------------------------
+ LOADED-CLASS-COUNT     17330                                                   
+ TOTAL-LOADED-CLASS-CO  17386                                                   
+ UNT                                                                            
+ UNLOADED-CLASS-COUNT   56                                                      
+ IS-VERBOSE             false                                                   
+                                                                                
+--------------------------------------------------------------------------------
+ COMPILATION                                                                    
+--------------------------------------------------------------------------------
+ NAME                   HotSpot 64-Bit Tiered Compilers                         
+ TOTAL-COMPILE-TIME     23769                                                   
+ [time (ms)]                                                                    
+                                                                                
+--------------------------------------------------------------------------------
+ GARBAGE-COLLECTORS                                                             
+--------------------------------------------------------------------------------
+ PS Scavenge            name : PS Scavenge                                      
+ [count/time (ms)]      collectionCount : 12                                    
+                        collectionTime : 116                                    
+ PS MarkSweep           name : PS MarkSweep                                     
+ [count/time (ms)]      collectionCount : 4                                     
+                        collectionTime : 215                                    
+                                                                                
+--------------------------------------------------------------------------------
+ MEMORY-MANAGERS                                                                
+--------------------------------------------------------------------------------
+ CodeCacheManager       Code Cache                                              
+ Metaspace Manager      Metaspace                                               
+                        Compressed Class Space                                  
+ PS Scavenge            PS Eden Space                                           
+                        PS Survivor Space                                       
+ PS MarkSweep           PS Eden Space                                           
+                        PS Survivor Space                                       
+                        PS Old Gen                                              
+                                                                                
+--------------------------------------------------------------------------------
+ MEMORY                                                                         
+--------------------------------------------------------------------------------
+ HEAP-MEMORY-USAGE      init : 524288000(500.0 MiB)                             
+ [memory in bytes]      used : 158083432(150.8 MiB)                             
+                        committed : 1412431872(1.3 GiB)                         
+                        max : 7440171008(6.9 GiB)                               
+ NO-HEAP-MEMORY-USAGE   init : 2555904(2.4 MiB)                                 
+ [memory in bytes]      used : 146826456(140.0 MiB)                             
+                        committed : 154599424(147.4 MiB)                        
+                        max : -1(-1 B)                                          
+ PENDING-FINALIZE-COUN  0                                                       
+ T                                                                              
+                                                                                
+--------------------------------------------------------------------------------
+ OPERATING-SYSTEM                                                               
+--------------------------------------------------------------------------------
+ OS                     Windows 11                                              
+ ARCH                   amd64                                                   
+ PROCESSORS-COUNT       16                                                      
+ LOAD-AVERAGE           -1.0                                                    
+ VERSION                10.0                                                    
+                                                                                
+--------------------------------------------------------------------------------
+ THREAD                                                                         
+--------------------------------------------------------------------------------
+ COUNT                  272                                                     
+ DAEMON-COUNT           178                                                     
+ PEAK-COUNT             272                                                     
+ STARTED-COUNT          282                                                     
+ DEADLOCK-COUNT         0                                                       
+                                                                                
+--------------------------------------------------------------------------------
+ FILE-DESCRIPTOR                                                                
+--------------------------------------------------------------------------------
+ MAX-FILE-DESCRIPTOR-C  -1                                                      
+ OUNT                                                                           
+ OPEN-FILE-DESCRIPTOR-  -1                                                      
+ COUNT                                                                          
+                                                                                
+[arthas@3756]$ 

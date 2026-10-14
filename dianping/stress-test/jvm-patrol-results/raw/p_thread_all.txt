@@ -1,0 +1,329 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 7692 already using port 3658
+[INFO] Process 7692 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          7692                                                               
+start_time   2026-10-14 21:45:57.189                                            
+current_time 2026-10-14 21:47:15.898                                            
+
+[arthas@7692]$ thread --all | plaintext
+Threads Total: 304, NEW: 0, RUNNABLE: 66, BLOCKED: 0, WAITING: 160, TIMED_WAITIN
+G: 50, TERMINATED: 0, Internal threads: 28                                      
+ID NAME                GROUP     PRIORI STATE  %CPU  DELTA_ TIME   INTER DAEMON 
+2  Reference Handler   system    10     WAITIN 0.0   0.000  0:0.03 false true   
+3  Finalizer           system    8      WAITIN 0.0   0.000  0:0.03 false true   
+4  Signal Dispatcher   system    9      RUNNAB 0.0   0.000  0:0.00 false true   
+5  Attach Listener     system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-timer        system    5      WAITIN 0.0   0.000  0:0.00 false true   
+27 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-shell-server system    5      TIMED_ 0.0   0.000  0:0.00 false true   
+27 arthas-session-mana system    5      TIMED_ 0.0   0.000  0:0.00 false true   
+28 mcp-keep-alive-sche system    5      TIMED_ 0.0   0.000  0:0.00 false true   
+28 mcp-task-cleanup-1  system    5      TIMED_ 0.0   0.000  0:0.00 false true   
+28 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.03 false true   
+28 arthas-command-exec system    5      RUNNAB 0.0   0.000  0:0.06 false true   
+28 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.03 false true   
+28 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.01 false true   
+28 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.01 false true   
+30 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.03 false true   
+31 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+31 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.01 false true   
+31 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+23 Catalina-utility-1  main      1      TIMED_ 0.0   0.000  0:0.00 false false  
+24 Catalina-utility-2  main      1      WAITIN 0.0   0.000  0:0.00 false false  
+25 container-0         main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+26 Thread-2            main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+28 lettuce-eventExecut main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+27 lettuce-timer-3-1   main      5      TIMED_ 0.0   0.000  0:0.06 false true   
+29 mysql-cj-abandoned- main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+30 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+31 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+32 AsyncAppender-Dispa main      5      WAITIN 0.0   0.000  0:0.00 false true   
+34 ClientHouseKeepingS main      5      TIMED_ 0.0   0.000  0:0.01 false true   
+35 AsyncAppender-Dispa main      5      WAITIN 0.0   0.000  0:0.01 false true   
+36 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+37 MQClientFactorySche main      5      TIMED_ 0.0   0.000  0:0.28 false false  
+38 AsyncAppender-Dispa main      5      WAITIN 0.0   0.000  0:0.00 false true   
+39 PullMessageService  main      5      WAITIN 0.0   0.000  0:0.01 false false  
+40 RebalanceService    main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+42 ClientHouseKeepingS main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+43 NettyClientSelector main      5      RUNNAB 0.0   0.000  0:0.06 false false  
+44 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.09 false false  
+45 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+46 MQClientFactorySche main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+47 PullMessageService  main      5      WAITIN 0.0   0.000  0:0.00 false false  
+48 RebalanceService    main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+49 MQ-AsyncTraceDispat main      5      TIMED_ 0.0   0.000  0:0.25 false true   
+51 NettyClientSelector main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+52 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+54 redisson-netty-4-1  main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+55 redisson-netty-4-2  main      5      RUNNAB 0.0   0.000  0:0.06 false false  
+56 redisson-netty-4-3  main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+57 redisson-netty-4-4  main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+58 redisson-netty-4-5  main      5      RUNNAB 0.0   0.000  0:0.03 false false  
+59 redisson-netty-4-6  main      5      RUNNAB 0.0   0.000  0:0.03 false false  
+60 redisson-netty-4-7  main      5      RUNNAB 0.0   0.000  0:0.04 false false  
+61 redisson-netty-4-8  main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+62 redisson-netty-4-9  main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+63 redisson-netty-4-10 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+64 redisson-netty-4-11 main      5      RUNNAB 0.0   0.000  0:0.03 false false  
+65 redisson-netty-4-12 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+53 redisson-timer-6-1  main      5      TIMED_ 0.0   0.000  0:0.06 false false  
+67 redisson-netty-4-20 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+68 redisson-netty-4-16 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+69 redisson-netty-4-18 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+70 redisson-netty-4-17 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+66 redisson-netty-4-14 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+71 redisson-netty-4-19 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+72 redisson-netty-4-21 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+73 redisson-netty-4-23 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+74 redisson-netty-4-22 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+75 redisson-netty-4-15 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+76 redisson-netty-4-13 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+77 redisson-netty-4-24 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+78 redisson-netty-4-25 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+79 redisson-netty-4-26 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+80 redisson-netty-4-27 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+81 redisson-netty-4-28 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+82 redisson-netty-4-29 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+83 redisson-netty-4-30 main      5      RUNNAB 0.0   0.000  0:0.01 false false  
+84 redisson-netty-4-31 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+85 redisson-netty-4-32 main      5      RUNNAB 0.0   0.000  0:0.00 false false  
+86 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.03 false false  
+87 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+88 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+89 CleanExpireMsgSched main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+90 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+91 MQ-AsyncTraceDispat main      5      TIMED_ 0.0   0.000  0:0.18 false true   
+93 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.01 false false  
+94 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+95 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+96 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.01 false false  
+97 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.01 false false  
+98 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+99 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+10 PullMessageServiceS main      5      WAITIN 0.0   0.000  0:0.00 false false  
+10 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+10 CleanExpireMsgSched main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+10 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+10 MQ-AsyncTraceDispat main      5      TIMED_ 0.0   0.000  0:0.23 false true   
+10 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.01 false false  
+10 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+10 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+10 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+11 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+11 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+11 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+11 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+11 CleanExpireMsgSched main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+11 MQ-AsyncTraceDispat main      5      TIMED_ 0.0   0.000  0:0.29 false true   
+11 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+11 ClientHouseKeepingS main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+12 RequestHouseKeeping main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+12 MQClientFactorySche main      5      TIMED_ 0.0   0.000  0:0.03 false false  
+12 CleanExpireMsgSched main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+12 PullMessageService  main      5      WAITIN 0.0   0.000  0:0.00 false false  
+12 RebalanceService    main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+12 NettyClientSelector main      5      RUNNAB 0.0   0.000  0:0.03 false false  
+12 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.00 false false  
+12 NettyClientWorkerTh main      5      TIMED_ 0.0   0.000  0:0.01 false false  
+12 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+12 MQ-AsyncTraceDispat main      5      TIMED_ 0.0   0.000  0:0.20 false true   
+13 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+13 PullMessageServiceS main      5      WAITIN 0.0   0.000  0:0.00 false false  
+13 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+13 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+13 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+13 http-nio-8081-Block main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+13 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.21 false true   
+13 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+13 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+14 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+15 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+16 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+17 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+18 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+19 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+20 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+21 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+22 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-exec- main      5      WAITIN 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-Clien main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+23 http-nio-8081-Accep main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+23 scheduling-1        main      5      TIMED_ 0.0   0.000  0:1.23 false false  
+24 DestroyJavaVM       main      5      RUNNAB 0.0   0.000  0:10.2 false false  
+24 HikariPool-1 housek main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+24 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+24 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+24 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+24 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+24 boundedElastic-evic main      5      TIMED_ 0.0   0.000  0:0.00 false true   
+24 commons-pool-evicto main      5      TIMED_ 0.0   0.000  0:0.01 false true   
+25 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.01 false true   
+25 Thread-19           main      5      WAITIN 0.0   0.000  0:0.00 false true   
+25 SimplePauseDetector main      5      TIMED_ 0.0   0.000  0:0.10 false true   
+25 SimplePauseDetector main      5      TIMED_ 0.0   0.000  0:0.10 false true   
+25 SimplePauseDetector main      5      TIMED_ 0.0   0.000  0:0.20 false true   
+25 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+25 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+25 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+25 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+26 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+26 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+26 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+26 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+26 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+26 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+26 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+26 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+26 NettyClientPublicEx main      5      WAITIN 0.0   0.000  0:0.00 false false  
+28 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+29 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+30 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+30 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+30 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+30 lettuce-eventExecut main      5      WAITIN 0.0   0.000  0:0.00 false true   
+30 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+30 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+30 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+30 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+30 lettuce-nioEventLoo main      5      RUNNAB 0.0   0.000  0:0.00 false true   
+-1 Service Thread      -         -1     -      0.0   0.000  0:0.03 false true   
+-1 C1 CompilerThread9  -         -1     -      0.0   0.000  0:0.82 false true   
+-1 C1 CompilerThread8  -         -1     -      0.0   0.000  0:0.95 false true   
+-1 C1 CompilerThread10 -         -1     -      0.0   0.000  0:0.92 false true   
+-1 C1 CompilerThread11 -         -1     -      0.0   0.000  0:0.87 false true   
+-1 GC task thread#11 ( -         -1     -      0.0   0.000  0:0.10 false true   
+-1 GC task thread#10 ( -         -1     -      0.0   0.000  0:0.10 false true   
+-1 C2 CompilerThread2  -         -1     -      0.0   0.000  0:2.85 false true   
+-1 C2 CompilerThread3  -         -1     -      0.0   0.000  0:2.85 false true   
+-1 C2 CompilerThread4  -         -1     -      0.0   0.000  0:2.23 false true   
+-1 GC task thread#8 (P -         -1     -      0.0   0.000  0:0.12 false true   
+-1 C2 CompilerThread5  -         -1     -      0.0   0.000  0:2.28 false true   
+-1 C2 CompilerThread6  -         -1     -      0.0   0.000  0:2.53 false true   
+-1 GC task thread#7 (P -         -1     -      0.0   0.000  0:0.10 false true   
+-1 GC task thread#12 ( -         -1     -      0.0   0.000  0:0.10 false true   
+-1 C2 CompilerThread7  -         -1     -      0.0   0.000  0:2.29 false true   
+-1 GC task thread#6 (P -         -1     -      0.0   0.000  0:0.10 false true   
+-1 VM Periodic Task Th -         -1     -      0.0   0.000  0:0.12 false true   
+-1 GC task thread#0 (P -         -1     -      0.0   0.000  0:0.10 false true   
+-1 C2 CompilerThread0  -         -1     -      0.0   0.000  0:2.65 false true   
+-1 C2 CompilerThread1  -         -1     -      0.0   0.000  0:2.06 false true   
+-1 GC task thread#9 (P -         -1     -      0.0   0.000  0:0.12 false true   
+-1 GC task thread#1 (P -         -1     -      0.0   0.000  0:0.09 false true   
+-1 VM Thread           -         -1     -      0.0   0.000  0:0.51 false true   
+-1 GC task thread#2 (P -         -1     -      0.0   0.000  0:0.10 false true   
+-1 GC task thread#3 (P -         -1     -      0.0   0.000  0:0.12 false true   
+-1 GC task thread#5 (P -         -1     -      0.0   0.000  0:0.14 false true   
+-1 GC task thread#4 (P -         -1     -      0.0   0.000  0:0.12 false true   
+[arthas@7692]$ 

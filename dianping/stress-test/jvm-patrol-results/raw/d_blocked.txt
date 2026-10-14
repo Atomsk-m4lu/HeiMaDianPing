@@ -1,0 +1,28 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 7692 already using port 3658
+[INFO] Process 7692 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          7692                                                               
+start_time   2026-10-14 21:45:57.189                                            
+current_time 2026-10-14 21:47:15.898                                            
+
+[arthas@7692]$ thread --state BLOCKED | plaintext
+Threads Total: 279, NEW: 0, RUNNABLE: 69, BLOCKED: 2, WAITING: 158, TIMED_WAITIN
+G: 50, TERMINATED: 0                                                            
+ID NAME                GROUP     PRIORI STATE  %CPU  DELTA_ TIME   INTER DAEMON 
+16 http-nio-8081-exec- main      5      BLOCKE 0.0   0.000  0:0.03 false true   
+16 http-nio-8081-exec- main      5      BLOCKE 0.0   0.000  0:0.01 false true   
+                                                                                
+[arthas@7692]$ 

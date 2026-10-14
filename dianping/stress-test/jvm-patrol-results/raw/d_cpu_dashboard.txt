@@ -1,0 +1,92 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 7692 already using port 3658
+[INFO] Process 7692 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          7692                                                               
+start_time   2026-10-14 21:45:57.189                                            
+current_time 2026-10-14 21:47:15.898                                            
+
+[arthas@7692]$ dashboard -i 1000 -n 3 | plaintext
+ID NAME                GROUP     PRIORI STATE  %CPU  DELTA_ TIME   INTER DAEMON 
+24 DestroyJavaVM       main      5      RUNNAB 0.0   0.000  0:10.2 false false  
+-1 C2 CompilerThread0  -         -1     -      0.0   0.000  0:6.48 false true   
+-1 C2 CompilerThread4  -         -1     -      0.0   0.000  0:6.32 false true   
+-1 C2 CompilerThread1  -         -1     -      0.0   0.000  0:6.09 false true   
+23 scheduling-1        main      5      TIMED_ 0.0   0.000  0:5.78 false false  
+-1 C2 CompilerThread3  -         -1     -      0.0   0.000  0:5.76 false true   
+-1 C2 CompilerThread5  -         -1     -      0.0   0.000  0:5.48 false true   
+-1 C2 CompilerThread6  -         -1     -      0.0   0.000  0:5.35 false true   
+-1 C2 CompilerThread2  -         -1     -      0.0   0.000  0:5.25 false true   
+-1 C2 CompilerThread7  -         -1     -      0.0   0.000  0:4.85 false true   
+Memory           used  total max  usage GC                                      
+heap             556M  1579M      7.85%                     15                  
+ps_eden_space    484M  1042M            gc.ps_scavenge.time 140                 
+                 18M   19M   19M        (ms)                                    
+ps_old_gen       53M   517M       1.00% gc.ps_marksweep.cou 5                   
+nonheap          148M  175M  -1         nt                                      
+code_cache       29M   51M   240M       gc.ps_marksweep.tim 301                 
+metaspace        105M  110M  -1         e(ms)                                   
+Runtime                                                                         
+os.name                                 Windows 11                              
+os.version                              10.0                                    
+java.version                            1.8.0_504                               
+ID NAME                GROUP     PRIORI STATE  %CPU  DELTA_ TIME   INTER DAEMON 
+22 http-nio-8081-exec- main      5      WAITIN 65.18 0.656  0:0.65 false true   
+-1 C2 CompilerThread5  -         -1     -      1.55  0.015  0:5.50 false true   
+2  Reference Handler   system    10     WAITIN 0.0   0.000  0:0.03 false true   
+3  Finalizer           system    8      WAITIN 0.0   0.000  0:0.04 false true   
+4  Signal Dispatcher   system    9      RUNNAB 0.0   0.000  0:0.00 false true   
+5  Attach Listener     system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-timer        system    5      WAITIN 0.0   0.000  0:0.00 false true   
+27 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+Memory           used  total max  usage GC                                      
+heap             560M  1579M      7.90%                     15                  
+ps_eden_space    488M  1042M            gc.ps_scavenge.time 140                 
+                 18M   19M   19M        (ms)                                    
+ps_old_gen       53M   517M       1.00% gc.ps_marksweep.cou 5                   
+nonheap          148M  175M  -1         nt                                      
+code_cache       30M   51M   240M       gc.ps_marksweep.tim 301                 
+metaspace        105M  110M  -1         e(ms)                                   
+Runtime                                                                         
+os.name                                 Windows 11                              
+os.version                              10.0                                    
+java.version                            1.8.0_504                               
+ID NAME                GROUP     PRIORI STATE  %CPU  DELTA_ TIME   INTER DAEMON 
+20 http-nio-8081-exec- main      5      RUNNAB 42.02 0.421  0:0.42 false true   
+2  Reference Handler   system    10     WAITIN 0.0   0.000  0:0.03 false true   
+3  Finalizer           system    8      WAITIN 0.0   0.000  0:0.04 false true   
+4  Signal Dispatcher   system    9      RUNNAB 0.0   0.000  0:0.00 false true   
+5  Attach Listener     system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-timer        system    5      WAITIN 0.0   0.000  0:0.00 false true   
+27 arthas-NettyHttpTel system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-NettyWebsock system    5      RUNNAB 0.0   0.000  0:0.00 false true   
+27 arthas-shell-server system    5      TIMED_ 0.0   0.000  0:0.00 false true   
+Memory           used  total max  usage GC                                      
+heap             561M  1579M      7.92%                     15                  
+ps_eden_space    489M  1042M            gc.ps_scavenge.time 140                 
+                 18M   19M   19M        (ms)                                    
+ps_old_gen       53M   517M       1.00% gc.ps_marksweep.cou 5                   
+nonheap          148M  175M  -1         nt                                      
+code_cache       30M   51M   240M       gc.ps_marksweep.tim 301                 
+metaspace        105M  110M  -1         e(ms)                                   
+Runtime                                                                         
+os.name                                 Windows 11                              
+os.version                              10.0                                    
+java.version                            1.8.0_504                               
+Process ends after 3 time(s).
+[arthas@7692]$ 

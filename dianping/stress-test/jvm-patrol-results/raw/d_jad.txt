@@ -1,0 +1,403 @@
+﻿[INFO] JAVA_HOME: C:\Users\ZZCstupid\.jdks\corretto-1.8.0_504\jre
+[INFO] arthas-boot version: 4.3.5
+[INFO] Process 7692 already using port 3658
+[INFO] Process 7692 already using port 8563
+[INFO] arthas home: C:\Users\ZZCstupid\.arthas\lib\4.3.5\arthas
+[INFO] The target process already listen port 3658, skip attach.
+[INFO] arthas-client connect 127.0.0.1 3658
+[1;31m  ,---.  [1;33m,------. [1;36m,--------.[1;35m,--.  ,--.[1;32m  ,---.  [1;34m ,---.  [0m                         
+[1;31m /  O  \ [1;33m|  .--. '[1;36m'--.  .--'[1;35m|  '--'  |[1;32m /  O  \ [1;34m'   .-' [0m                         
+[1;31m|  .-.  |[1;33m|  '--'.'[1;36m   |  |   [1;35m|  .--.  |[1;32m|  .-.  |[1;34m`.  `-. [0m                         
+[1;31m|  | |  |[1;33m|  |\  \ [1;36m   |  |   [1;35m|  |  |  |[1;32m|  | |  |[1;34m.-'    |[0m                         
+[1;31m`--' `--'[1;33m`--' '--'[1;36m   `--'   [1;35m`--'  `--'[1;32m`--' `--'[1;34m`-----' [0m                         
+
+wiki         https://arthas.aliyun.com/doc                                      
+version      4.3.5                                                              
+main_class   dianping\hmdp-start\target\hmdp-start-0.0.1-SNAPSHOT.jar           
+pid          7692                                                               
+start_time   2026-10-14 21:45:57.189                                            
+current_time 2026-10-14 21:47:15.898                                            
+
+[arthas@7692]$ jad com.hmdp.service.impl.VoucherOrderServiceImpl | plaintext
+
+ClassLoader:                                                                    
++-org.springframework.boot.loader.LaunchedURLClassLoader@7daf6ecc               
+  +-sun.misc.Launcher$AppClassLoader@70dea4e                                    
+    +-sun.misc.Launcher$ExtClassLoader@22d8cfe0                                 
+
+Location:                                                                       
+file:/D:/computer/ppppp/hmdp-mq/dianping/hmdp-start/target/hmdp-start-0.0.1-SNAP
+SHOT.jar!/BOOT-INF/lib/hmdp-service-0.0.1-SNAPSHOT.jar!/                        
+
+        /*
+         * Decompiled with CFR.
+         * 
+         * Could not load the following classes:
+         *  cn.hutool.json.JSONUtil
+         *  com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper
+         *  com.baomidou.mybatisplus.extension.conditions.update.UpdateChainWrapper
+         *  com.baomidou.mybatisplus.extension.service.impl.ServiceImpl
+         *  com.hmdp.dto.Result
+         *  com.hmdp.dto.SeckillVoucherOrderMessage
+         *  com.hmdp.entity.SeckillVoucher
+         *  com.hmdp.entity.VoucherOrder
+         *  com.hmdp.entity.VoucherReconcileLog
+         *  com.hmdp.mapper.VoucherOrderMapper
+         *  com.hmdp.mapper.VoucherReconcileLogMapper
+         *  com.hmdp.service.ISeckillVoucherService
+         *  com.hmdp.service.IVoucherOrderService
+         *  com.hmdp.service.VoucherOrderCreateResult
+         *  com.hmdp.service.impl.OrderCreateVerificationService
+         *  com.hmdp.service.impl.RocketMqReliablePublisher
+         *  com.hmdp.service.impl.RollbackFailureService
+         *  com.hmdp.shared.SeckillBugFlags
+         *  com.hmdp.shared.reconciliation.model.ReconcileBusinessType
+         *  com.hmdp.shared.reconciliation.model.ReconcileLogType
+         *  com.hmdp.shared.reconciliation.model.ReconciliationStatus
+         *  com.hmdp.shared.reconciliation.model.VoucherOrderStatus
+         *  com.hmdp.utils.RedisIdWorker
+         *  com.hmdp.utils.UserHolder
+         *  org.apache.rocketmq.spring.core.RocketMQTemplate
+         *  org.redisson.api.RLock
+         *  org.redisson.api.RedissonClient
+         *  org.slf4j.Logger
+         *  org.slf4j.LoggerFactory
+         *  org.springframework.aop.framework.AopContext
+         *  org.springframework.beans.factory.annotation.Autowired
+         *  org.springframework.core.io.ClassPathResource
+         *  org.springframework.core.io.Resource
+         *  org.springframework.dao.DuplicateKeyException
+         *  org.springframework.data.redis.core.StringRedisTemplate
+         *  org.springframework.data.redis.core.script.DefaultRedisScript
+         *  org.springframework.stereotype.Service
+         *  org.springframework.transaction.annotation.Transactional
+         *  org.springframework.transaction.interceptor.TransactionAspectSupport
+         */
+        package com.hmdp.service.impl;
+        
+        import cn.hutool.json.JSONUtil;
+        import com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper;
+        import com.baomidou.mybatisplus.extension.conditions.update.UpdateChainWrapper;
+        import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+        import com.hmdp.dto.Result;
+        import com.hmdp.dto.SeckillVoucherOrderMessage;
+        import com.hmdp.entity.SeckillVoucher;
+        import com.hmdp.entity.VoucherOrder;
+        import com.hmdp.entity.VoucherReconcileLog;
+        import com.hmdp.mapper.VoucherOrderMapper;
+        import com.hmdp.mapper.VoucherReconcileLogMapper;
+        import com.hmdp.service.ISeckillVoucherService;
+        import com.hmdp.service.IVoucherOrderService;
+        import com.hmdp.service.VoucherOrderCreateResult;
+        import com.hmdp.service.impl.OrderCreateVerificationService;
+        import com.hmdp.service.impl.RocketMqReliablePublisher;
+        import com.hmdp.service.impl.RollbackFailureService;
+        import com.hmdp.shared.SeckillBugFlags;
+        import com.hmdp.shared.reconciliation.model.ReconcileBusinessType;
+        import com.hmdp.shared.reconciliation.model.ReconcileLogType;
+        import com.hmdp.shared.reconciliation.model.ReconciliationStatus;
+        import com.hmdp.shared.reconciliation.model.VoucherOrderStatus;
+        import com.hmdp.utils.RedisIdWorker;
+        import com.hmdp.utils.UserHolder;
+        import java.io.Serializable;
+        import java.time.LocalDateTime;
+        import java.util.Collections;
+        import java.util.concurrent.TimeUnit;
+        import javax.annotation.Resource;
+        import org.apache.rocketmq.spring.core.RocketMQTemplate;
+        import org.redisson.api.RLock;
+        import org.redisson.api.RedissonClient;
+        import org.slf4j.Logger;
+        import org.slf4j.LoggerFactory;
+        import org.springframework.aop.framework.AopContext;
+        import org.springframework.beans.factory.annotation.Autowired;
+        import org.springframework.core.io.ClassPathResource;
+        import org.springframework.dao.DuplicateKeyException;
+        import org.springframework.data.redis.core.StringRedisTemplate;
+        import org.springframework.data.redis.core.script.DefaultRedisScript;
+        import org.springframework.stereotype.Service;
+        import org.springframework.transaction.annotation.Transactional;
+        import org.springframework.transaction.interceptor.TransactionAspectSupport;
+        
+        @Service
+        public class VoucherOrderServiceImpl
+        extends ServiceImpl<VoucherOrderMapper, VoucherOrder>
+        implements IVoucherOrderService {
+            private static final Logger log = LoggerFactory.getLogger(VoucherOrderServiceImpl.class);
+            private static final int ORDER_CREATE_CONFIRM_TIMEOUT_SECONDS = 3;
+            @Resource
+            private ISeckillVoucherService seckillVoucherService;
+            @Resource
+            private RocketMQTemplate rocketMQTemplate;
+            @Resource
+            private RocketMqReliablePublisher rocketMqReliablePublisher;
+            @Resource
+            private RedisIdWorker redisIdWorker;
+            @Resource
+            private StringRedisTemplate stringRedisTemplate;
+            @Resource
+            private RedissonClient redissonClient;
+            @Autowired(required=false)
+            private VoucherReconcileLogMapper voucherReconcileLogMapper;
+            @Autowired(required=false)
+            private OrderCreateVerificationService orderCreateVerificationService;
+            @Resource
+            private RollbackFailureService rollbackFailureService;
+            private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+            private static final DefaultRedisScript<Long> SECKILL_PLUS_SCRIPT;
+            private static final DefaultRedisScript<Long> SECKILL_PLUS_ROLLBACK_SCRIPT;
+            private static final String SECKILL_PLUS_ORDER_DESTINATION = "seckill-plus-order-topic:order-create";
+            private static final String SECKILL_PLUS_TIMEOUT_DESTINATION = "seckill-plus-order-topic:order-timeout";
+            private static final long SECKILL_TRACE_TTL_SECONDS = 172800L;
+            private static final Object BUG_LOCK_A;
+            private static final Object BUG_LOCK_B;
+            private IVoucherOrderService proxy;
+        
+            private Integer loadDbStock(Long voucherId) {
+                SeckillVoucher voucher = (SeckillVoucher)this.seckillVoucherService.getById((Serializable)voucherId);
+                return voucher == null ? null : voucher.getStock();
+            }
+        
+            private static long fibonacciWarmup(int n) {
+/*441*/         if (n <= 1) {
+                    return n;
+                }
+/*442*/         return VoucherOrderServiceImpl.fibonacciWarmup(n - 1) + VoucherOrderServiceImpl.fibonacciWarmup(n - 2);
+            }
+        
+            /*
+             * WARNING - Removed try catching itself - possible behaviour change.
+             */
+            public Result seckillVoucherPlus(Long voucherId) {
+                Object suspect;
+                int r;
+/*213*/         Long userId = UserHolder.getUser().getId();
+/*214*/         long orderId = this.redisIdWorker.nextId("order");
+                String traceId = "trace-" + orderId;
+                Long result = (Long)this.stringRedisTemplate.execute(SECKILL_PLUS_SCRIPT, Collections.emptyList(), new Object[]{voucherId.toString(), userId.toString(), String.valueOf(orderId), traceId, String.valueOf(172800L), String.valueOf(System.currentTimeMillis())});
+/*228*/         int n = r = result == null ? -1 : result.intValue();
+/*229*/         if (r != 0) {
+/*230*/             return Result.fail((String)(r == 1 ? "库存不足" : (r == 2 ? "不能重复下单" : (r == 3 ? "请求过于频繁，请稍后重试" : "秒杀库存未初始化"))));
+                }
+/*234*/         if (SeckillBugFlags.CPU_SPIN.get()) {
+/*236*/             VoucherOrderServiceImpl.fibonacciWarmup(42);
+                }
+/*238*/         if (SeckillBugFlags.CPU_REGEX.get()) {
+                    suspect = userId.toString() + "1111111111111";
+/*241*/             SeckillBugFlags.BACKTRACK_PATTERN.matcher((CharSequence)suspect).matches();
+                }
+/*243*/         if (SeckillBugFlags.DEADLOCK.get()) {
+                    Object object;
+/*245*/             if (userId % 2L == 0L) {
+/*246*/                 suspect = BUG_LOCK_A;
+                        synchronized (suspect) {
+                            try {
+/*247*/                         Thread.sleep(50L);
+                            }
+                            catch (InterruptedException interruptedException) {
+                                // empty catch block
+                            }
+/*248*/                     object = BUG_LOCK_B;
+                            synchronized (object) {
+                            }
+                        }
+                    }
+/*251*/             suspect = BUG_LOCK_B;
+                    synchronized (suspect) {
+                        try {
+/*252*/                     Thread.sleep(50L);
+                        }
+                        catch (InterruptedException interruptedException) {
+                            // empty catch block
+                        }
+/*253*/                 object = BUG_LOCK_A;
+                        synchronized (object) {
+                        }
+                    }
+                }
+                VoucherOrder order = new VoucherOrder();
+/*259*/         order.setId(Long.valueOf(orderId));
+/*260*/         order.setUserId(userId);
+/*261*/         order.setVoucherId(voucherId);
+/*262*/         order.setTraceId(traceId);
+                try {
+/*265*/             SeckillVoucherOrderMessage message = this.buildOrderMessage(order);
+/*266*/             String payload = JSONUtil.toJsonStr((Object)message);
+/*269*/             boolean sent = this.rocketMqReliablePublisher.publish("SECKILL_ORDER_CREATE", SECKILL_PLUS_ORDER_DESTINATION, payload);
+/*274*/             if (!sent) {
+                        try {
+/*277*/                     this.rollbackSeckillVoucherPlus(order);
+                        }
+                        catch (Exception rollbackEx) {
+/*279*/                     this.rollbackFailureService.record("MAIN_CHAIN", order, "REDIS_EXECUTE_ERROR", 1, (Throwable)rollbackEx);
+                        }
+/*282*/                 return Result.fail((String)"下单人数过多，请重试");
+                    }
+/*287*/             if (this.orderCreateVerificationService != null && !this.existsVoucherOrder(orderId)) {
+/*288*/                 this.orderCreateVerificationService.createPendingTask(Long.valueOf(orderId), userId, voucherId, traceId);
+                    }
+/*292*/             this.rocketMqReliablePublisher.publishDelay("SECKILL_ORDER_TIMEOUT", SECKILL_PLUS_TIMEOUT_DESTINATION, payload, 14);
+/*298*/             return Result.ok((Object)orderId);
+                }
+                catch (Exception e) {
+/*300*/             log.error("send seckill plus order message failed, orderId={}", (Object)orderId, (Object)e);
+                    try {
+/*302*/                 this.rollbackSeckillVoucherPlus(order);
+                    }
+                    catch (Exception rollbackEx) {
+/*304*/                 this.rollbackFailureService.record("MAIN_CHAIN", order, "REDIS_EXECUTE_ERROR", 1, (Throwable)rollbackEx);
+                    }
+/*307*/             return Result.fail((String)"下单人数过多，请重试");
+                }
+            }
+        
+            @Transactional
+            public VoucherOrderCreateResult createVoucherOrderPlus(SeckillVoucherOrderMessage message) {
+                VoucherOrder voucherOrder = new VoucherOrder().setId(message.getOrderId()).setUserId(message.getUserId()).setVoucherId(message.getVoucherId()).setTraceId(message.getTraceId()).setStatus(VoucherOrderStatus.UNPAID).setCreateTime(LocalDateTime.now());
+                try {
+/*371*/             this.save(voucherOrder);
+                }
+                catch (DuplicateKeyException e) {
+/*373*/             log.info("duplicate voucher order ignored, orderId={}, userId={}, voucherId={}", new Object[]{voucherOrder.getId(), voucherOrder.getUserId(), voucherOrder.getVoucherId()});
+/*375*/             return VoucherOrderCreateResult.DUPLICATE;
+                }
+/*379*/         Integer beforeQty = this.loadDbStock(voucherOrder.getVoucherId());
+/*380*/         boolean success = ((UpdateChainWrapper)((UpdateChainWrapper)((UpdateChainWrapper)this.seckillVoucherService.update().setSql("stock=stock-1")).eq((Object)"voucher_id", (Object)voucherOrder.getVoucherId())).gt((Object)"stock", (Object)0)).update();
+/*386*/         if (!success) {
+/*388*/             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+/*389*/             log.error("db stock not enough when creating seckill plus order, orderId={}", (Object)voucherOrder.getId());
+/*390*/             return VoucherOrderCreateResult.OUT_OF_STOCK;
+                }
+/*394*/         this.saveDeductReconcileLog(message, voucherOrder, beforeQty);
+/*397*/         if (SeckillBugFlags.MEMORY_LEAK.get()) {
+/*399*/             SeckillBugFlags.LEAK_CACHE.put(voucherOrder.getId(), voucherOrder);
+                }
+/*401*/         if (SeckillBugFlags.GC_ALLOC.get()) {
+/*403*/             byte[] reportBuffer = new byte[0x500000];
+/*404*/             for (int i = 0; i < reportBuffer.length; i += 4096) {
+/*405*/                 reportBuffer[i] = (byte)(i % 256);
+                    }
+                }
+/*409*/         return VoucherOrderCreateResult.CREATED;
+            }
+        
+            public void rollbackSeckillVoucherPlus(VoucherOrder voucherOrder) {
+/*427*/         this.executeGovernanceRollback(voucherOrder);
+/*428*/         this.saveRestoreReconcileLog(voucherOrder, ReconcileBusinessType.FAIL, "rollback triggered");
+            }
+        
+            private void saveRestoreReconcileLog(VoucherOrder order, ReconcileBusinessType businessType, String detail) {
+/*510*/         if (this.voucherReconcileLogMapper == null) {
+/*511*/             return;
+                }
+                VoucherReconcileLog log = new VoucherReconcileLog().setOrderId(order.getId()).setUserId(order.getUserId()).setVoucherId(order.getVoucherId()).setTraceId(order.getTraceId() == null ? "trace-" + order.getId() : order.getTraceId()).setChangeQty(Integer.valueOf(1)).setLogType(ReconcileLogType.RESTORE).setBusinessType(businessType).setReconciliationStatus(ReconciliationStatus.PENDING).setDetail(detail);
+/*523*/         this.voucherReconcileLogMapper.insert((Object)log);
+            }
+        
+            private SeckillVoucherOrderMessage buildOrderMessage(VoucherOrder order) {
+                SeckillVoucherOrderMessage message = new SeckillVoucherOrderMessage();
+/*456*/         message.setOrderId(order.getId());
+/*457*/         message.setUserId(order.getUserId());
+/*458*/         message.setVoucherId(order.getVoucherId());
+/*459*/         message.setTraceId(order.getTraceId());
+/*460*/         return message;
+            }
+        
+            void sleepForOrderConfirm() {
+                try {
+/*447*/             TimeUnit.SECONDS.sleep(3L);
+                }
+                catch (InterruptedException e) {
+/*449*/             Thread.currentThread().interrupt();
+                }
+            }
+        
+            private void saveDeductReconcileLog(SeckillVoucherOrderMessage message, VoucherOrder order, Integer beforeQty) {
+/*489*/         if (this.voucherReconcileLogMapper == null) {
+/*490*/             return;
+                }
+/*492*/         int afterQty = beforeQty == null ? -1 : beforeQty - 1;
+                VoucherReconcileLog log = new VoucherReconcileLog().setOrderId(order.getId()).setUserId(order.getUserId()).setVoucherId(order.getVoucherId()).setTraceId(message.getTraceId()).setBeforeQty(beforeQty).setChangeQty(Integer.valueOf(1)).setAfterQty(Integer.valueOf(afterQty)).setLogType(ReconcileLogType.DEDUCT).setBusinessType(ReconcileBusinessType.SUCCESS).setReconciliationStatus(ReconciliationStatus.PENDING).setDetail("db order created and stock deducted");
+/*505*/         this.voucherReconcileLogMapper.insert((Object)log);
+            }
+        
+            @Transactional
+            public void createVoucherOrder(VoucherOrder voucherOrder) {
+/*319*/         Long userId = voucherOrder.getUserId();
+                int count = ((QueryChainWrapper)((QueryChainWrapper)this.query().eq((Object)"user_id", (Object)userId)).eq((Object)"voucher_id", (Object)voucherOrder.getVoucherId())).count();
+/*321*/         if (count > 0) {
+/*322*/             log.error("用户已经购买过一次了");
+/*323*/             return;
+                }
+/*330*/         boolean success = ((UpdateChainWrapper)((UpdateChainWrapper)((UpdateChainWrapper)this.seckillVoucherService.update().setSql("stock=stock-1")).eq((Object)"voucher_id", (Object)voucherOrder.getVoucherId())).gt((Object)"stock", (Object)0)).update();
+/*331*/         if (!success) {
+/*332*/             log.error("库存不足");
+/*333*/             return;
+                }
+/*335*/         this.save(voucherOrder);
+            }
+        
+            private void executeGovernanceRollback(VoucherOrder voucherOrder) {
+/*469*/         this.stringRedisTemplate.execute(SECKILL_PLUS_ROLLBACK_SCRIPT, Collections.emptyList(), new Object[]{voucherOrder.getVoucherId().toString(), voucherOrder.getUserId().toString(), String.valueOf(voucherOrder.getId()), voucherOrder.getTraceId() == null ? "trace-" + voucherOrder.getId() : voucherOrder.getTraceId(), String.valueOf(172800L), String.valueOf(System.currentTimeMillis())});
+            }
+        
+            public void handleVoucherOrder(VoucherOrder voucherOrder) {
+/*533*/         Long userId = voucherOrder.getUserId();
+                RLock lock = this.redissonClient.getLock("lock:order:" + userId);
+                boolean isLock = lock.tryLock();
+/*536*/         if (!isLock) {
+/*537*/             log.error("不允许重复下单");
+/*538*/             return;
+                }
+                try {
+/*541*/             this.proxy.createVoucherOrder(voucherOrder);
+                }
+                catch (IllegalStateException e) {
+                    throw new RuntimeException(e);
+                }
+                finally {
+                    lock.unlock();
+                }
+            }
+        
+            public boolean existsVoucherOrder(Long orderId) {
+/*436*/         return ((VoucherOrderMapper)this.getBaseMapper()).selectById((Serializable)orderId) != null;
+            }
+        
+            public Result seckillVoucher(Long voucherId) {
+/*173*/         Long userId = UserHolder.getUser().getId();
+/*174*/         long orderId = this.redisIdWorker.nextId("order");
+/*175*/         Long result = (Long)this.stringRedisTemplate.execute(SECKILL_SCRIPT, Collections.emptyList(), new Object[]{voucherId.toString(), userId.toString(), String.valueOf(orderId)});
+/*180*/         int r = 0;
+/*181*/         if (result != null) {
+/*182*/             r = result.intValue();
+                }
+/*184*/         if (r != 0) {
+/*185*/             return Result.fail((String)(r == 1 ? "库存不足" : "不能重复下单"));
+                }
+                VoucherOrder order = new VoucherOrder();
+/*188*/         order.setId(Long.valueOf(orderId));
+/*189*/         order.setUserId(userId);
+/*190*/         order.setVoucherId(voucherId);
+/*191*/         this.proxy = (IVoucherOrderService)AopContext.currentProxy();
+/*192*/         this.proxy.createVoucherOrder(order);
+/*193*/         return Result.ok((Object)orderId);
+            }
+        
+            static {
+                BUG_LOCK_A = new Object();
+                BUG_LOCK_B = new Object();
+                SECKILL_SCRIPT = new DefaultRedisScript();
+/*153*/         SECKILL_SCRIPT.setLocation((org.springframework.core.io.Resource)new ClassPathResource("seckill.lua"));
+/*154*/         SECKILL_SCRIPT.setResultType(Long.class);
+                SECKILL_PLUS_SCRIPT = new DefaultRedisScript();
+/*157*/         SECKILL_PLUS_SCRIPT.setLocation((org.springframework.core.io.Resource)new ClassPathResource("seckill_plus.lua"));
+/*158*/         SECKILL_PLUS_SCRIPT.setResultType(Long.class);
+                SECKILL_PLUS_ROLLBACK_SCRIPT = new DefaultRedisScript();
+/*161*/         SECKILL_PLUS_ROLLBACK_SCRIPT.setLocation((org.springframework.core.io.Resource)new ClassPathResource("seckill_plus_rollback.lua"));
+/*162*/         SECKILL_PLUS_ROLLBACK_SCRIPT.setResultType(Long.class);
+            }
+        }
+
+Affect(row-cnt:4) cost in 745 ms.
+[arthas@7692]$ 
