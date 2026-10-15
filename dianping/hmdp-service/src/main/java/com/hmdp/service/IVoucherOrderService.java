@@ -36,7 +36,7 @@ public interface IVoucherOrderService extends IService<VoucherOrder> {
     /**
      * 秒杀Plus下单（异步建单版本，推荐）
      * <p>
-     * 完整链路：雪花算法生成 orderId → Redis Lua 原子校验（请求去重 + 库存 + 一人一单）
+     * 完整链路：RedisIdWorker 生成 orderId → Redis Lua 原子校验（请求去重 + 库存 + 一人一单）
      * → 可靠 MQ 发送建单消息 → 发送延时关单消息 → 返回 orderId。
      * MQ 发送失败时自动回滚 Redis 库存。
      * </p>

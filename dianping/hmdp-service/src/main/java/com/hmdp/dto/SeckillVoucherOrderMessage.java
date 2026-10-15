@@ -19,7 +19,7 @@ public class SeckillVoucherOrderMessage implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** 预生成的订单ID（雪花算法） */
+    /** 预生成的订单ID（RedisIdWorker：秒级时间戳 + Redis 自增序列） */
     private Long orderId;
 
     /** 下单用户ID */

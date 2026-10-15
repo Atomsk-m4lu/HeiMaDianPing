@@ -102,6 +102,8 @@ public class OrderCreateRecoveryService {
      */
     public void createRecoveryTask(SeckillVoucherOrderMessage orderMessage, String sourceMessage, int reconsumeTimes) {
         try {
+            // OrderCreateRecoveryTask.pending() 构造初始 PENDING 状态的恢复任务，
+            // 随后 setLastMessage 把 MQ 耗尽重试的现场记录下来，方便运维排查
             taskMapper.insert(OrderCreateRecoveryTask.pending(
                     "recover-order-" + orderMessage.getOrderId(),
                     orderMessage.getOrderId(),
@@ -112,6 +114,9 @@ public class OrderCreateRecoveryService {
                     maxRetryCount
             ).setLastMessage("MQ retries exhausted at reconsumeTimes=" + reconsumeTimes));
         } catch (DuplicateKeyException e) {
+            // 唯一键冲突说明同一条订单的恢复任务已经建过了 —— 这是预期内的，
+            // 因为 RocketMQ at-least-once 语义 + 监听端被多次触发重试耗尽，
+            // 用 DuplicateKeyException 做自然幂等，info 级别避免日志风暴
             log.info("recovery task already exists, skip creating, orderId={}", orderMessage.getOrderId());
         }
     }

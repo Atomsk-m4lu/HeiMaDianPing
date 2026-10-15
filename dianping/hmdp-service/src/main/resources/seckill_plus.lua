@@ -4,7 +4,7 @@
 -- 参数说明：
 --   ARGV[1] voucherId   - 优惠券ID
 --   ARGV[2] userId      - 用户ID
---   ARGV[3] orderId     - 预生成的订单ID（雪花算法）
+--   ARGV[3] orderId     - 预生成的订单ID（RedisIdWorker：秒级时间戳 + Redis自增序列）
 --   ARGV[4] traceId     - 对账追踪ID（trace-{orderId}）
 --   ARGV[5] ttlSeconds  - 追踪日志过期时间（秒）
 --   ARGV[6] nowMillis   - 当前时间戳（毫秒）

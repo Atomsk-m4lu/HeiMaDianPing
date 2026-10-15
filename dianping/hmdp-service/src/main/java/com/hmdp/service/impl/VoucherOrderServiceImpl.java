@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>{@code
  * 用户请求 seckillVoucherPlus(voucherId)
  *   │
- *   ├─ 1. 雪花算法预生成订单ID + traceId
+ *   ├─ 1. RedisIdWorker 预生成订单ID（秒级时间戳 + Redis自增序列，无机器位的雪花变体）+ traceId
  *   │
  *   ├─ 2. 执行 seckill_plus.lua（Redis原子操作）
  *   │      ├─ 请求去重（同一用户1秒内只允许一个请求）
@@ -93,7 +93,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RocketMqReliablePublisher rocketMqReliablePublisher;
 
-    /** 雪花算法 ID 生成器（生成订单 ID） */
+    /** 分布式 ID 生成器（秒级时间戳 + Redis 自增序列，用于预生成订单 ID） */
     @Resource
     private RedisIdWorker redisIdWorker;
 
@@ -297,13 +297,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             );
             return Result.ok(orderId);
         } catch (Exception e) {
+            // 兜底 catch：覆盖 buildOrderMessage 构造、JSON 序列化、甚至 publish 内部未捕获异常等所有意外。
+            // 注意：异常大概率发生在 Lua 脚本扣库存之后，此时 Redis 库存已减，必须回滚才能让用户重试
             log.error("send seckill plus order message failed, orderId={}", orderId, e);
             try {
+                // 还原 Redis 扣掉的库存，让用户可以重新发起秒杀
                 rollbackSeckillVoucherPlus(order);
             } catch (Exception rollbackEx) {
+                // 回滚自己也炸了 —— 记下来等运维/对账任务捞，不能悄悄吞掉
                 rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
                         order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
             }
+            // 回滚成功或失败都返回同一个文案：用户侧感知一致（请重试），最终一致性靠补偿链路兜底
             return Result.fail("下单人数过多，请重试");
         }
     }
@@ -375,13 +380,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return VoucherOrderCreateResult.DUPLICATE;
         }
 
-        // 2. DB乐观锁扣库存 — gt("stock", 0) 防止超卖
+        // 2. DB乐观锁扣库存 —— 与 Redis Lua 脚本形成双扣兜底：Redis 挡高并发洪水，DB 做持久层最终一致
         Integer beforeQty = loadDbStock(voucherOrder.getVoucherId());
         boolean success = seckillVoucherService
-                .update()
-                .setSql("stock=stock-1")
-                .eq("voucher_id", voucherOrder.getVoucherId())
-                .gt("stock", 0)
+                .update()                                            // 开启 UpdateWrapper 链式构建
+                .setSql("stock=stock-1")                            // 原生 SQL 表达式，让 DB 原子执行自减，避免 JVM 读写竞态
+                .eq("voucher_id", voucherOrder.getVoucherId())      // 限定目标券
+                .gt("stock", 0)                                     // WHERE stock > 0 —— 乐观锁式防超卖，库存耗尽时 update 影响行数为 0（非异常）
                 .update();
         if (!success) {
             // DB库存不足 → 标记事务回滚（订单插入也会回滚）

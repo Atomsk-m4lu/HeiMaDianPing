@@ -69,6 +69,22 @@ public class RocketMqReliablePublisher {
         return doPublish(eventType, destination, payload, false);
     }
 
+    /**
+     * 同步发送 RocketMQ 消息的内部公共实现 —— 供 {@link #publish} / {@link #resend} 复用。
+     *
+     * <p>始终走 syncSend 保证调用方能立刻拿到发送结果，
+     * 失败兜底策略由 persistOnFailure 决定：
+     * <ul>
+     *     <li>{@code true} —— 首发生命周期，失败落库（persistFailure）由定时任务补偿</li>
+     *     <li>{@code false} —— 重试生命周期，失败不落库（避免重试风暴膨胀 tb_mq_event_record）</li>
+     * </ul></p>
+     *
+     * @param eventType        事件类型标识（如 SECKILL_ORDER_CREATE），落库时用于分类/查询
+     * @param destination      RocketMQ 目标 topic（可带 tag，格式 topic:tag）
+     * @param payload          消息体 JSON 字符串
+     * @param persistOnFailure 发送失败时是否持久化到 DB 等待后续补偿
+     * @return true=发送成功；false=发送失败
+     */
     private boolean doPublish(String eventType, String destination, String payload, boolean persistOnFailure) {
         try {
             rocketMQTemplate.syncSend(destination, MessageBuilder.withPayload(payload).build());

@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 /**
  * 优惠券订单实体 — 秒杀/普通购买的核心订单模型。
  *
- * <p>秒杀Plus流程中，订单ID由雪花算法在Redis Lua执行前预生成，
+ * <p>秒杀Plus流程中，订单ID由 RedisIdWorker（秒级时间戳 + Redis 自增序列）在 Redis Lua 执行前预生成，
  * 保证即使在分布式环境下也能唯一标识一笔订单。</p>
  *
  * <p>订单状态流转：
@@ -33,7 +33,7 @@ public class VoucherOrder implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    /** 主键 — 由雪花算法预生成（IdType.INPUT），非DB自增 */
+    /** 主键 — 由 RedisIdWorker 预生成（IdType.INPUT），非 DB 自增 */
     @TableId(value = "id", type = IdType.INPUT)
     private Long id;
 
