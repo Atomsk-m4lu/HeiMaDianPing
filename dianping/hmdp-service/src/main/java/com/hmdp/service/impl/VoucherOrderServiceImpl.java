@@ -438,7 +438,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     /** 递归斐波那契 — CPU密集型，用于模拟"热点数据预热" */
     private static long fibonacciWarmup(int n) {
-        if (n <= 1) return n;
+        if (n <= 1) {
+            return n;
+        }
         return fibonacciWarmup(n - 1) + fibonacciWarmup(n - 2);
     }
 
