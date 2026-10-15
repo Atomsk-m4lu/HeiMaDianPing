@@ -1,4 +1,4 @@
-# 🐴 HeiMaDianPing — 黑马点评深度魔改版
+# 🐴 hmdp-ultra — 黑马点评深度魔改版
 
 ![Java](https://img.shields.io/badge/Java-8%2B-orange)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.x-green)
@@ -6,8 +6,10 @@
 ![RocketMQ](https://img.shields.io/badge/RocketMQ-异步架构-blue)
 ![MySQL](https://img.shields.io/badge/MySQL-8.x-yellow)
 ![MyBatis--Plus](https://img.shields.io/badge/MyBatis--Plus-ORM-green)
+![Caffeine](https://img.shields.io/badge/Caffeine-L1%20缓存-brown)
 ![JMeter](https://img.shields.io/badge/JMeter-压测-orange)
 ![Arthas](https://img.shields.io/badge/Arthas-诊断-red)
+![Seckill](https://img.shields.io/badge/秒杀-4000并发·零超卖-success)
 
 一个基于**黑马点评**（大众点评类本地生活平台）的**深度魔改学习项目**。
 
@@ -57,7 +59,20 @@
 ### 🧪 故障演练与压测闭环
 
 - 7 类 JVM 故障注入开关：CPU 自旋、正则灾难性回溯、堆内存泄漏、ThreadLocal 泄漏、死锁、线程爆炸、大对象分配
-- JMeter 压测脚本 + 结果归档 + Arthas 排查演练（dashboard / thread / jad / watch）
+- JVM 巡检流程：10 项基线巡检 + 死锁 / CPU 两场实战演练（`thread -b` 实锤死锁、jstack 火焰栈实锤热点），产出 HTML 报告
+- JMeter 压测脚本（一键清库 / 同步库存 / 批量造 Token）+ Arthas 排查演练（dashboard / thread / jad / watch）
+
+### 📊 五轮压测矩阵（实测归档）
+
+| 轮次 | 变量 | 实测结果 |
+|---|---|---|
+| R1 基线 | 新版 · 4000 并发 / 3s 爬坡 | **4000/4000 全成、0 失败；Redis 与 MySQL 双侧完全一致、零超卖**；热机吞吐 154 req/s（Avg 51ms） |
+| R2 对照 | 旧版 jar · 同参数 | 旧版 800 笔发送超时 → 回滚 + 本地消息表补发，暴露"回滚后订单仍被补建"语义冲突（字节码 + SQL 双证） |
+| R3 限流 | 滑动窗口 · 开 / 关 | 开：同用户 12 并发 **5 过 7 拒**（429 + 指标 + 日志 + Redis 键四证）；关：0 拒；恢复后复测有效 |
+| R4 缓存 | 多级缓存 L1 · 开 / 关 | 开：50 请求 **L1 命中 45、Redis 读流量省 90%**；关：每次请求打 Redis |
+| R5 故障 | CPU 自旋注入 | 冷 JIT 单请求 **10–16s（约 775×）**，jstack 抓到 26 层火焰栈直指注入点 `fibonacciWarmup` |
+
+> 原始数据（JTL / 日志 / 火焰栈 / 四份分析报告）见 [`dianping/stress-test`](dianping/stress-test)。
 
 ---
 
@@ -116,7 +131,7 @@ sequenceDiagram
 |---|---|
 | 框架 | Spring Boot、Spring MVC、Spring AOP/事务 |
 | 数据访问 | MyBatis-Plus、MySQL 8 |
-| 缓存 | Redis（Lettuce 连接池）、Redisson |
+| 缓存 | Redis（Lettuce 连接池）、Redisson、Caffeine（L1 本地缓存） |
 | 消息队列 | RocketMQ（同步发送、延时消息、批量消费） |
 | 文档/工具 | Lombok、Hutool、Spring Boot Actuator + Prometheus |
 | 质量 | JMeter 压测、Arthas 诊断、JUnit |
@@ -169,6 +184,10 @@ java -jar dianping/hmdp-start/target/*.jar
 curl http://localhost:8081/actuator/health
 ```
 
+### 一键压测（可选）
+
+`dianping/stress-test/` 提供完整工具链：`prepare_seckill_test.sh`（批量造用户 Token + 清库 + 同步库存）→ `run_seckill_test.sh`（JMeter 压测 + 指标报告，需先 `export MYSQL_PASS=<密码>`）。历史结果与五轮矩阵归档在 `results/`。
+
 ---
 
 ## 🔧 可观测与压测
@@ -187,15 +206,19 @@ curl http://localhost:8081/actuator/health
 1. **延时消息档位与关单门槛存在时序差**——延时级别 14（RocketMQ 默认约 10 分钟）早于 15 分钟关单门槛，实际关单由 2 分钟周期的兜底任务完成；正确做法是档位与门槛二选一对齐。
 2. **批量消费不向 MQ 回抛异常**——单条失败由批量监听器捕获后直接写入 recovery_task（恢复任务重放兜底），另有建单校验与对账兜底，换取批处理吞吐；代价是主动放弃 MQ 层自动重试语义（重试语义上移到业务任务层）。
 3. **对账自动补偿默认关闭**——先观察异常模式再人工开启，避免补偿逻辑本身放大故障。
+4. **发送失败语义冲突**——"回滚 + 提示重试"与"本地消息表补发建单"两条路径并存：被回滚用户的订单仍可能被补发任务建出（唯一键保证不会重复建单，但提示语义冲突）。修复方向二选一：回滚时同步作废重试记录，或提示语改为"处理中"。
+5. **对账体系以 DB 留痕为锚**——"Redis 已动、DB 未留痕"的中间态对现有四级兜底不可见（故障演练中实弹暴露 4 例 Redis 预占残留）。改进方向：把预扣追踪日志纳入对账数据源。
 
 ---
 
 ## 🗺️ Roadmap
 
+- [x] 五轮压测矩阵 + 三组开/关对照实验（限流 / 多级缓存 / 新旧版本）——结果归档 `dianping/stress-test/`
+- [ ] 修复建单校验重试耗尽后未转恢复任务的接线问题（构造器未注入恢复服务）
+- [ ] 对账数据源纳入 Redis 预扣追踪日志，覆盖"无 DB 留痕"漂移
 - [ ] 接入虚拟线程（任务链 IO 池与消费池）
 - [ ] Agent 评估体系（回答准确率/工具调用成功率）
 - [ ] 多实例部署下的定时任务分布式调度（当前单机 `@Scheduled`）
-- [ ] 补充压测对比报告（同步确认窗口开/关的 TPS / RT 数据）
 
 ---
 
