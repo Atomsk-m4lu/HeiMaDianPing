@@ -178,9 +178,11 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
             }
             return;
         }
-        // 分支 2：rollbackSeckillVoucherPlus 自己也失败了（比如 Lua 脚本执行异常）
-        // → 彻底失去自动回滚能力，留给 SeckillReconcileScanJob 对账引擎兜底
-        //   对账引擎扫 Redis DEDUCT 日志 vs DB 订单表，发现"有扣减日志但没订单"就自动补偿
+        // 分支 2：ROLLBACK_FAILED —— ⚠️ 预留扩展，当前是死代码
+        // 实际回滚失败不走这里，而是上面分支 1 里 rollbackSeckillVoucherPlus() 抛异常
+        // 被外层 catch（行 174-178）捕获 → rollbackFailureService.record() 写 tb_rollback_failure_log
+        // → SeckillReconcileScanJob 对账引擎扫 DEDUCT 日志 vs DB 订单表做最终兜底
+        // 保留此分支是为将来 rollbackSeckillVoucherPlus 改为返回值驱动时启用
         if (result == VoucherOrderCreateResult.ROLLBACK_FAILED) {
             log.error("seckill plus rollback failed, left to reconciliation, orderId={}", order.getId());
             return;

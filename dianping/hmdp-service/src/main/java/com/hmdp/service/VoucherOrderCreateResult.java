@@ -8,7 +8,11 @@ package com.hmdp.service;
  *   <li><b>CREATED</b> — 订单创建成功，库存扣减完成，后续写入对账追踪</li>
  *   <li><b>DUPLICATE</b> — 重复订单（主键冲突），幂等忽略，不做回滚</li>
  *   <li><b>OUT_OF_STOCK</b> — DB库存不足，事务回滚，需调用 rollbackSeckillVoucherPlus 回退 Redis 库存</li>
- *   <li><b>ROLLBACK_FAILED</b> — 回滚操作失败，留给对账引擎兜底处理</li>
+ *   <li><b>ROLLBACK_FAILED</b> — 回滚操作失败，留给对账引擎兜底处理
+ *       <p><i>⚠️ 预留扩展枚举：当前业务链路中无代码 return 此值，
+ *       实际回滚失败由 {@code SeckillPlusOrderListener} 外层 catch 异常处理
+ *       （写 tb_rollback_failure_log + 对账引擎兜底）。
+ *       保留此枚举是为将来 rollbackSeckillVoucherPlus 改为返回值驱动做准备。</i></p></li>
  * </ul></p>
  */
 public enum VoucherOrderCreateResult {

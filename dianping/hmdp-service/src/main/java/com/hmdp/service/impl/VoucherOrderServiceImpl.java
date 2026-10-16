@@ -284,6 +284,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
             // 2. 等待异步建单落地（已注释，压测对比效果）
 //             sleepForOrderConfirm();
+             // 登记订单创建校验任务（巡检兜底）
+             // ---------------------------------------------------------------------
+             // 主链路已注释掉 sleepForOrderConfirm() 同步等待（第285行），不阻塞用户响应；
+             // 这里登记一条 PENDING 任务交由 OrderCreateVerifyJob（每5秒）巡检：
+             //   DB有订单 + DB有DEDUCT日志 → SUCCESS（一致）
+             //   还没建好（MQ延迟/Lag）  → RETRYING，下次再查
+             //   重试耗尽              → FAILED → RecoveryService 主动补偿建单
+             //
+             // null 检查：@Autowired(required=false) — 对账兜底模块可整体关掉做压测对照；
+             // existsVoucherOrder 预查：本地Broker/极低延迟场景下MQ可能已消费完，
+             // 订单此时已落库，跳过登记 = 避免白白多一轮 Job 巡检 + DB 查询。
+             // ---------------------------------------------------------------------
              if (orderCreateVerificationService != null && !existsVoucherOrder(orderId)) {
                 orderCreateVerificationService.createPendingTask(orderId, userId, voucherId, traceId);
              }
