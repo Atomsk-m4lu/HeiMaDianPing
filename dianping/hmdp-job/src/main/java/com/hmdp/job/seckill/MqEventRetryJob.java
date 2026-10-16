@@ -103,15 +103,21 @@ public class MqEventRetryJob {
                 record.setRetryCount(nextRetryCount);
                 record.setLastError("resend failed at attempt " + nextRetryCount);
                 record.setUpdateTime(LocalDateTime.now());
+                // resolveStatusAfterFailure 根据 nextRetryCount 是否达上限返回 FAILED 或 PENDING_RETRY，
+                // 抽出独立方法是为了单测能完整覆盖终态规则（见下方方法注释）
                 boolean exhausted = STATUS_FAILED.equals(resolveStatusAfterFailure(nextRetryCount));
                 if (exhausted) {
+                    // 重试耗尽 → 转 FAILED 终态（不再被 selectList 扫描到），留人工处理入口
                     record.setEventStatus(STATUS_FAILED);
                     log.error("mq event retry exhausted, marked FAILED for manual handling, id={}, retryCount={}",
                             record.getId(), nextRetryCount);
                 } else {
+                    // 未耗尽 → 重置 nextRetryTime 让下一轮 Job 继续捞（30s 固定间隔，简化版指数退避）
                     record.setNextRetryTime(LocalDateTime.now().plusSeconds(30));
                 }
+                // 无论转态还是续期，都统一 updateById 落库 —— retryCount/lastError/updateTime 已经在上面更新好了
                 mqEventRecordMapper.updateById(record);
+                // 只有真正进入 FAILED 终态才记指标，中间过程失败不算，避免监控面板被"正常重试"刷爆
                 if (exhausted) {
                     metricsRecorder.incMqEventFailed();
                 }

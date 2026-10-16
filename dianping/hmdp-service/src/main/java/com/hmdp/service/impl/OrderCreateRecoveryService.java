@@ -130,10 +130,20 @@ public class OrderCreateRecoveryService {
      */
     public void processDueTasks() {
         QueryWrapper<OrderCreateRecoveryTask> wrapper = new QueryWrapper<>();
+        // 扫描条件和 OrderCreateVerificationService.verifyDueTasks 同构：
+        // PENDING/RETRYING 是非终态（SUCCESS/MANUAL_REVIEW/CLOSED 不再捞），
+        // next_execute_time <= now 控制退避节奏 —— 没到期的任务主动让给到期的
         wrapper.in("task_status", OrderCreateRecoveryStatus.PENDING.name(), OrderCreateRecoveryStatus.RETRYING.name())
                 .le("next_execute_time", LocalDateTime.now())
+                // limit 20 同样是小批量削峰 —— Recovery 的 processSingleTask 比 Verification 重得多
+                // （Verification 只是查两条表，Recovery 要走完整建单链路：事务 + 库存扣 + DEDUCT 日志），
+                // 所以 limit 控制更严，避免一次拉太多把 DB/MQ 压垮
                 .last("limit 20");
         List<OrderCreateRecoveryTask> tasks = taskMapper.selectList(wrapper);
+        // 注意：这里没有外层 try-catch —— 单条任务的异常处理下沉到了 processSingleTask 内部，
+        // 和 Verification 的 verifyDueTasks 风格不同（Verification 有外层 try-catch）。
+        // Recovery 不包的原因：如果 recover 过程中 DB/MQ 整体故障，单条 catch 没意义，
+        // 让异常冒到 Job 层统一告警更合理
         for (OrderCreateRecoveryTask task : tasks) {
             processSingleTask(task);
         }

@@ -48,11 +48,28 @@ public class SeckillReconcileCompensationService {
         this.retryDelaySeconds = retryDelaySeconds;
     }
 
+    /**
+     * 定时扫描 WAITING 状态的对账异常 task 并执行自动补偿。
+     *
+     * <p>和 Verification / Recovery 的区别：这是对账链路的"兜底闭环"——前面两层发现异常后，
+     * 只有 autoCompensationEnabled=true 且异常类型为 DEDUCT_PRESENT_ORDER_MISSING（库存真扣了但订单丢了）
+     * 的 task 才会走到这里；其他异常一律等人工。</p>
+     *
+     * <p>三层扫描条件的配合拳：
+     * <ul>
+     *   <li>compensation_status = WAITING —— 只捞"等补偿"的 task，已处理（DONE/NOT_NEEDED）或失败（FAILED）的跳过</li>
+     *   <li>next_execute_time <= now —— 调度节流，和 processSingleTask 里 markFailed 重置 nextExecuteTime 配对，形成退避节奏</li>
+     *   <li>limit batchSize —— 同 Recovery，单条补偿要调 rollbackSeckillVoucherPlus（涉及 Redis），重操作必须限量</li>
+     * </ul></p>
+     */
     public void processDueTasks() {
+        // 总闸门：autoCompensationEnabled=false 时整个补偿链路不跑 —— 生产环境建议默认关，
+        // 只有对账系统稳定验证过"DEDUCT_PRESENT_ORDER_MISSING 自动补偿逻辑没问题"后再打开
         if (!autoCompensationEnabled) {
             return;
         }
         QueryWrapper<SeckillReconcileTask> wrapper = new QueryWrapper<>();
+        // 三条件联合筛选：只捞"等补偿 + 已到期 + 限量"的 task
         wrapper.eq("compensation_status", SeckillReconcileCompensationStatus.WAITING.name())
                 .le("next_execute_time", LocalDateTime.now())
                 .last("limit " + batchSize);
@@ -62,19 +79,45 @@ public class SeckillReconcileCompensationService {
         }
     }
 
+    /**
+     * 执行单条对账异常的自动补偿 —— 对 DEDUCT_PRESENT_ORDER_MISSING 场景（库存真扣了但订单丢了）
+     * 回滚 Redis 库存，让这笔优惠券能被其他用户重新抢到。
+     *
+     * <p>⚠️ 这是一个<b>有副作用的破坏性操作</b>（回滚库存），所以比 Verification/Recovery 的处理多了
+     * 两道预检查防线 —— 确保"现在库存真的需要还回去"才动手，避免误补偿导致超卖。</p>
+     *
+     * <p>执行流程：</p>
+     * <pre>
+     *   markProcessing 抢占 → anomalyType 校验 → 订单存在性检查 → 日志状态检查 → 回滚库存 → 双状态闭环
+     *     (无锁)          (类型门槛)        (自愈了就跳过)       (兜底防线)      (核心动作)    (task + comp)
+     * </pre>
+     */
     void processSingleTask(SeckillReconcileTask task) {
+        // 和 Verification 的 markVerifying 同构：先抢状态 → taskStatus 变成 PROCESSING，
+        // 从 WAITING 集合里剔除，避免多节点 Job 重复处理同一条（无锁抢占）
         markProcessing(task);
+
+        // 🔒 第一道门槛：再校一次 anomalyType —— 理论上 createTaskIfAbsent 已经过滤过，
+        // 这里是"执行前最后一道保险"，防止代码改动或 task 被外部篡改后误补偿其他类型异常
         if (!SeckillReconcileAnomalyType.DEDUCT_PRESENT_ORDER_MISSING.name().equals(task.getAnomalyType())) {
             markFailed(task, "unsupported anomaly type for auto compensation");
             return;
         }
 
+        // 🛡️ 第二道防线：订单是否已经"自愈"？
+        // 扫描当时发现订单不存在，但可能 Recovery 后来成功建单了（或者消费者第一次就没成功、第二次重试成功了），
+        // 这时库存和订单都已经一致，不需要回滚了 —— 这就是"先扫描后补偿"模型的经典竞态：
+        // 扫描 → 发现异常 → 建 task → 补偿前，异常可能已经被其他链路修好了
         VoucherOrder order = voucherOrderMapper.selectById(task.getOrderId());
         if (order != null) {
             resolveWithoutRollback(task, "order already exists, no compensation needed");
             return;
         }
 
+        // 🛡️ 第三道防线：日志状态双校验
+        // DEDUCT 日志不存在？说明库存根本没扣（扫描时可能是误判，或者 DEDUCT 日志也被清理了）
+        // RESTORE 日志存在？说明库存已经被回滚过了（可能是手动、可能是之前补偿成功）
+        // 任一命中都意味着"不需要再补"，直接闭环
         VoucherReconcileLog deductLog = voucherReconcileLogMapper.selectOne(new QueryWrapper<VoucherReconcileLog>()
                 .eq("trace_id", task.getTraceId())
                 .eq("log_type", ReconcileLogType.DEDUCT)
@@ -88,11 +131,20 @@ public class SeckillReconcileCompensationService {
             return;
         }
 
+        // ✅ 三道防线都过了 —— 执行核心补偿动作：回滚 Redis 库存
+        // 注意：rollbackSeckillVoucherPlus 内部会同时写一条 RESTORE 类型的对账日志，
+        // 所以上面的第三道防线查 RESTORE 日志就是为了"补偿后能被识别"
+        // 这里 new 一个 VoucherOrder 只是为了凑齐 rollback 方法需要的参数（从 task 字段拼）
         voucherOrderService.rollbackSeckillVoucherPlus(new VoucherOrder()
                 .setId(task.getOrderId())
                 .setUserId(task.getUserId())
                 .setVoucherId(task.getVoucherId())
                 .setTraceId(task.getTraceId()));
+
+        // 双状态闭环：
+        // taskStatus=RESOLVED（任务本身解决）+ compensationStatus=DONE（补偿动作完成）
+        // 两个维度独立：compensationStatus 还有 NOT_NEEDED / FAILED 等取值，
+        // 所以必须同时 set，不能复用 taskStatus 表达补偿结果
         task.setCompensationStatus(SeckillReconcileCompensationStatus.DONE.name());
         task.setTaskStatus(SeckillReconcileTaskStatus.RESOLVED.name());
         task.setAnomalyDetail("rollback finished for missing order");

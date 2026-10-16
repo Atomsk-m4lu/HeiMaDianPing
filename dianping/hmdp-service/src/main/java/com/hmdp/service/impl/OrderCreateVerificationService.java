@@ -139,8 +139,13 @@ public class OrderCreateVerificationService {
      */
     public void verifyDueTasks() {
         QueryWrapper<OrderCreateVerifyTask> wrapper = new QueryWrapper<>();
+        // 只扫描"待处理 / 重试中"状态的任务（SUCCESS/FAILED 是终态，不再巡检）
         wrapper.in("task_status", OrderCreateVerifyStatus.PENDING.name(), OrderCreateVerifyStatus.RETRYING.name())
+                // 只捞"到期"的任务：next_check_time 由 verifySingleTask 在每次重试后重置，
+                // 未到期的任务留给后续 Job 轮次处理，避免一轮 Job 把所有任务都抢光
                 .le("next_check_time", LocalDateTime.now())
+                // 单次最多处理 20 条 —— Job 每 5 秒跑一轮，小批量 + 高频比大批量 + 低频更平滑，
+                // 同时避免一次 selectList 过多行导致 DB 压力尖峰
                 .last("limit 20");
         List<OrderCreateVerifyTask> tasks = taskMapper.selectList(wrapper);
         for (OrderCreateVerifyTask task : tasks) {
@@ -161,8 +166,15 @@ public class OrderCreateVerificationService {
      * @param task 待校验任务
      */
     void verifySingleTask(OrderCreateVerifyTask task) {
+        // 抢占标记：先把状态从 PENDING/RETRYING 改成 VERIFYING 再做校验。
+        // 因为 verifyDueTasks 的扫描条件只捞 PENDING/RETRYING（见 .in("task_status", ...)），
+        // 改成 VERIFYING 后即使有多个 Job 实例跑，这条任务也不会被重复捞到 —— 这是一种轻量级的
+        // "无锁抢占"设计，比 Redisson 分布式锁代价小得多，单机/多节点部署都适用
         markVerifying(task);
 
+        // 同时查订单表 + DEDUCT 对账日志 —— 只有两者都存在才算"建单成功且 DB 库存扣了"。
+        // 只查 order 不够：如果消费者 insert 成功但 DEDUCT 日志没写（事务异常/代码漏写），
+        // 就会出现"订单在但库存没扣"的不一致，这正是对账机制要兜底的
         VoucherOrder order = voucherOrderMapper.selectById(task.getOrderId());
         VoucherReconcileLog deductLog = voucherReconcileLogMapper.selectOne(new QueryWrapper<VoucherReconcileLog>()
                 .eq("trace_id", task.getTraceId())
@@ -170,6 +182,7 @@ public class OrderCreateVerificationService {
                 .last("limit 1"));
 
         if (order != null && deductLog != null) {
+            // ✅ 成功闭环：订单 + DEDUCT 日志都落库了，状态转 SUCCESS，updateById 后不再被 Job 扫描
             task.setTaskStatus(OrderCreateVerifyStatus.SUCCESS.name());
             task.setLastMessage("order and deduct log verified");
             touch(task);
@@ -177,15 +190,21 @@ public class OrderCreateVerificationService {
             return;
         }
 
+        // ❌ 还没齐：要么 MQ 消费者还没建完单，要么建单了但 DEDUCT 日志还没落（事务还在跑）
         int nextRetryCount = task.getRetryCount() + 1;
         task.setRetryCount(nextRetryCount);
         touch(task);
 
         if (nextRetryCount > task.getMaxRetryCount()) {
+            // 🔴 重试耗尽：转 FAILED 终态，同时给 OrderCreateRecoveryService 建一条恢复任务。
+            // 注意两个服务是接力关系：Verification 只负责"观察"，Recovery 负责"主动介入建单"，
+            // 这样两个职责解耦，Verification 不用关心 Recovery 的内部细节
             task.setTaskStatus(OrderCreateVerifyStatus.FAILED.name());
             task.setLastMessage("verification exhausted, waiting for recovery or manual review");
             taskMapper.updateById(task);
             if (orderCreateRecoveryService != null) {
+                // null 检查说明 RecoveryService 是可选注入（可能因循环依赖或某些部署不开启），
+                // 这种情况下 FAILED 就真的留给人工处理了
                 SeckillVoucherOrderMessage message = new SeckillVoucherOrderMessage();
                 message.setOrderId(task.getOrderId());
                 message.setUserId(task.getUserId());
@@ -200,6 +219,9 @@ public class OrderCreateVerificationService {
             return;
         }
 
+        // 🟡 继续等：状态转 RETRYING，next_check_time 重置为 retryDelaySeconds 后，
+        // 下次 Job 扫描时 .le("next_check_time", now) 才能再捞到 —— 配合 verifyDueTasks 的 limit 20
+        // 形成自然的"退避节奏"：没到期的任务自动让给到期的先处理
         task.setTaskStatus(OrderCreateVerifyStatus.RETRYING.name());
         task.setLastMessage("order or deduct log not ready, wait next verification");
         task.setNextCheckTime(LocalDateTime.now().plusSeconds(retryDelaySeconds));
