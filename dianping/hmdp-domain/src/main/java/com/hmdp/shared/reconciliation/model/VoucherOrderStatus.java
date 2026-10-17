@@ -15,7 +15,7 @@ import lombok.Getter;
  *
  * <p>秒杀Plus中的关键状态转换：
  * <ul>
- *   <li>异步建单时状态为 UNPAID，并发送延时14分钟的超时消息</li>
+ *   <li>异步建单时状态为 UNPAID，并发送延时 20 分钟（delayLevel=15）的超时消息</li>
  *   <li>超时未支付 → SeckillOrderTimeoutListener 将状态更新为 CANCELLED</li>
  *   <li>超时关单回退Job（SeckillTimeoutCloseFallbackJob）兜底处理未及时关闭的订单</li>
  * </ul></p>

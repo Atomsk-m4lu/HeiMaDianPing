@@ -37,11 +37,16 @@ public class SeckillOrderTimeoutService {
      * 定时关单兜底 —— 秒杀订单创建后 15 分钟未支付则自动取消并恢复库存。
      *
      * <p>和正常关单链路的关系：
-     * 正常关单靠 {@code VoucherOrderServiceImpl.publishDelay()} 发的延时 MQ 消息（10 分钟后触发），
-     * 这里的定时 Job 是<b>第二道保险</b> —— 延时消息发失败（persistOnFailure 兜底）、
-     * 或消费者挂了没消费，最终都会落到这里被捞起来关掉。</p>
+     * 正常关单靠 {@code VoucherOrderServiceImpl.publishDelay()} 发的延时 MQ 消息（delayLevel=15 实际 20 分钟后触发），
+     * 这里的定时 Job（每2分钟一轮）是<b>第一关</b> —— 绝大多数订单在16分钟左右被这里关闭，
+     * 延时消息20分钟到达时订单已被关，不会重复操作；
+     * 如果定时Job连续失效（如部署漏启@EnableScheduling、DB连接池耗尽），延时消息是<b>最后一道备份</b>，20分钟到达时
+     * 订单肯定已过15分钟门槛，能成功关闭。</p>
      *
-     * <p>为什么选 15 分钟而不是延时消息的 10 分钟？留 5 分钟 gap 给延时链路跑完，避免两边同时操作同一笔订单。</p>
+     * <p>为什么选 15 分钟门槛？给用户充足的支付时间（秒杀券不像演唱会门票必须速付）。</p>
+     * <p>为什么延时消息选20分钟（delayLevel=15）而不是更早的10分钟档？
+     * RocketMQ没有精确的15分钟延时档位（delayLevel只有14=10min、15=20min等固定档），
+     * 10min档早到会在Java层15min门槛下全跳过（白跑一条消息），20min档晚到则能兜底定时Job漏关的订单。</p>
      */
     public void closeTimeoutOrders() {
         // DB 查询只过滤 UNPAID + 按创建时间升序 + limit 20 —— 不在 SQL 里写死 15 分钟条件，

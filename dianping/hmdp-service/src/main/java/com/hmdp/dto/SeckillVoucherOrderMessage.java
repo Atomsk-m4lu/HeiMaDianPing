@@ -11,7 +11,7 @@ import java.io.Serializable;
  * <p>消息流向：
  * <ol>
  *   <li>order-create tag → SeckillPlusOrderListener（异步建单）</li>
- *   <li>order-timeout tag → SeckillOrderTimeoutListener（延时14分钟，超时关单）</li>
+ *   <li>order-timeout tag → SeckillOrderTimeoutListener（延时 20 分钟，关单兜底备份）</li>
  * </ol></p>
  */
 @Data

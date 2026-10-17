@@ -120,7 +120,7 @@ class VoucherOrderServiceImplTest {
                 .thenReturn(0L);
         when(reliablePublisher.publish(eq("SECKILL_ORDER_CREATE"), eq("seckill-plus-order-topic:order-create"), any()))
                 .thenReturn(true);
-        when(reliablePublisher.publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(14)))
+        when(reliablePublisher.publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(15)))
                 .thenReturn(true);
 
         Result result = service.seckillVoucherPlus(7L);
@@ -135,7 +135,7 @@ class VoucherOrderServiceImplTest {
                             && Long.valueOf(7L).equals(message.getVoucherId())
                             && Long.valueOf(9L).equals(message.getUserId());
                 }));
-        verify(reliablePublisher).publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(14));
+        verify(reliablePublisher).publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(15));
         verify(stringRedisTemplate).execute(any(), eq(Collections.emptyList()), eq("7"), eq("9"),
                 eq("101"), eq("trace-101"), any(), any());
     }
@@ -161,7 +161,7 @@ class VoucherOrderServiceImplTest {
                 .thenReturn(0L);
         when(reliablePublisher.publish(eq("SECKILL_ORDER_CREATE"), eq("seckill-plus-order-topic:order-create"), any()))
                 .thenReturn(true);
-        when(reliablePublisher.publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(14)))
+        when(reliablePublisher.publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(15)))
                 .thenReturn(true);
 
         Result result = service.seckillVoucherPlus(7L);

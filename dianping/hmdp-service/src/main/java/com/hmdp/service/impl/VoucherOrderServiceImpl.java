@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
  *   │      ├─ 成功 → 创建建单校验任务
  *   │      └─ 失败 → 回滚Redis库存（seckill_plus_rollback.lua）→ 返回错误
  *   │
- *   ├─ 4. 发送延时消息（order-timeout，14分钟后触发超时关单）
+ *   ├─ 4. 发送延时消息（order-timeout，delayLevel=15 实际 20 分钟后触发，做兜底 Job 的最后备份）
  *   │
  *   └─ 5. 返回 orderId 给用户
  *
@@ -300,12 +300,16 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 orderCreateVerificationService.createPendingTask(orderId, userId, voucherId, traceId);
              }
 
-            // 3. 发送延时消息（延时级别14≈14分钟），用于超时未支付自动关单
+            // 3. 发送延时消息（delayLevel=15，实际 20 分钟）—— 比兜底Job的15分钟门槛晚，
+            //    正常情况兜底Job在16分钟左右先关单，延时消息只在兜底失效时生效，做最后备份。
+            //    选20min而不是更早的10min档(delayLevel=14)是因为：
+            //    RocketMQ没有精确15min的档位(只有14=10min, 15=20min)，早到的档会在Java层15min门槛
+            //    下全跳过(白跑)，反而变成冗余消费；选更晚的档让延时消息真正有意义。
             rocketMqReliablePublisher.publishDelay(
                     "SECKILL_ORDER_TIMEOUT",
                     SECKILL_PLUS_TIMEOUT_DESTINATION,
                     payload,
-                    14
+                    15
             );
             return Result.ok(orderId);
         } catch (Exception e) {

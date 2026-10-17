@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
  * <p>在秒杀Plus流程中的位置：
  * <pre>{@code
  *   VoucherOrderServiceImpl.seckillVoucherPlus()
- *     → 发送 order-timeout 延时消息（延时14分钟）
- *     → 14分钟后 → 【本Listener】消费 → 检查订单状态 → 超时关单
+ *     → 发送 order-timeout 延时消息（delayLevel=15，实际 20 分钟）
+ *     → 20分钟后 → 【本Listener】消费 → 触发关单扫描（兜底 Job 失效时的最后备份）
  * }</pre></p>
  *
  * <p>处理逻辑：
@@ -25,8 +25,8 @@ import org.springframework.stereotype.Component;
  *   <li>调用 closeTimeoutOrders() 扫描并关闭超时未支付订单</li>
  * </ol></p>
  *
- * <p>兜底机制：如果本Listener未触发（如MQ延时消息丢失），
- * 由 SeckillTimeoutCloseFallbackJob 定时扫描兜底关闭。</p>
+ * <p>正反关系：正常关单由 SeckillTimeoutCloseFallbackJob 每 2 分钟扫描完成（15 分钟门槛，约 16 分钟关单）；
+ * 本Listener 的 20 分钟延时消息是最后一道备份——兜底 Job 若失效（漏启调度、DB 故障等），由它兜住。</p>
  */
 @Component
 @Slf4j
