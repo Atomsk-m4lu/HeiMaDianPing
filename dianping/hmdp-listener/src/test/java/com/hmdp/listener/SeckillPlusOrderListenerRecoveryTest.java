@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 class SeckillPlusOrderListenerRecoveryTest {
 
     @Test
-    void processMessage_shouldThrowDuringEarlyMqRetryForInfrastructureFailure() {
+    void processMessage_shouldThrowForBatchRecoveryHandoffOnInfrastructureFailure() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
         SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
@@ -40,7 +40,7 @@ class SeckillPlusOrderListenerRecoveryTest {
     }
 
     @Test
-    void processMessage_shouldCreateRecoveryTaskAfterMqRetryThreshold() {
+    void processMessage_shouldCreateRecoveryTaskAfterRedeliveryThreshold() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
         SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));

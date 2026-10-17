@@ -57,7 +57,13 @@ import java.util.concurrent.TimeUnit;
         selectorExpression = "order-create"
 )
 public class SeckillPlusOrderListener implements RocketMQListener<String>, RocketMQPushConsumerLifecycleListener {
-    private static final int MQ_MAX_RECONSUME_TIMES = 3;
+    /**
+     * 重投次数阈值：达到该值说明监听器此前异常退出过（例如 recovery_task 落库失败触发了
+     * Broker 整批重投），此时不再抛给批量监听器，直接在本地写恢复任务。
+     * 注意：本链路刻意不依赖 RocketMQ 重试（README 取舍 #2），该值只用于区分
+     * "首次投递"与"异常退出后的反复重投"。
+     */
+    private static final int REDELIVERY_THRESHOLD = 3;
 
     private final IVoucherOrderService voucherOrderService;
     private final OrderCreateRecoveryService orderCreateRecoveryService;
@@ -110,13 +116,14 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
      * ② 调 Service 层建订单；
      * ③ 根据建单结果分流处理：库存不足 → 回滚 Redis / 重复消息 → 幂等跳过 / 异常 → 交给 MQ 或恢复任务。</p>
      *
-     * <p>异常处理策略：任何异常均被上层 prepareStart 批量监听器捕获，
+     * <p>异常处理策略：正常路径下任何异常均被上层 prepareStart 批量监听器捕获，
      * 捕获后写入 recovery_task 表生成恢复任务，由 OrderCreateRecoveryJob 定时兜底补单，
-     * Broker 永远收到 CONSUME_SUCCESS（不触发整批重试，避免雪崩）。</p>
+     * Broker 收到 CONSUME_SUCCESS（不触发整批重试，避免雪崩）；
+     * 仅当恢复任务落库本身失败时异常外抛、触发整批重投作为兜底。</p>
      *
      * @param orderMessage   反序列化后的秒杀下单消息（含 orderId/userId/voucherId/traceId）
      * @param sourceMessage  原始 JSON 字符串（写入 recovery_task 表用，保留完整原文方便排查）
-     * @param reconsumeTimes 当前消息的 MQ 重试次数（RocketMQ 内部计数器）
+     * @param reconsumeTimes 当前消息的重投次数（RocketMQ 内部计数器；本链路不依赖 MQ 重试，仅用于区分首次投递与异常退出后的反复重投）
      */
     private void processMessage(SeckillVoucherOrderMessage orderMessage, String sourceMessage, int reconsumeTimes) {
         // 把消息里的四个字段拷进 VoucherOrder 实体 —— 后面 Service 调用和日志都用这个对象
@@ -145,15 +152,15 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
         try {
             result = voucherOrderService.createVoucherOrderPlus(orderMessage);
         } catch (Exception e) {
-            // 异常分两种情况处理：
-            if (reconsumeTimes < MQ_MAX_RECONSUME_TIMES) {
-                // ① 抛出异常由上层 prepareStart 批量监听器捕获，统一写入 recovery_task 表
-                log.warn("createVoucherOrderPlus failed, will throw for batch recovery, orderId={}, reconsumeTimes={}",
+            // 异常分两种情况处理（两条路径最终都以 recovery_task 收口，本链路刻意不依赖 MQ 重试）：
+            if (reconsumeTimes < REDELIVERY_THRESHOLD) {
+                // ① 首次/早期投递：抛给上层 prepareStart 批量监听器，由它统一写入 recovery_task 表
+                log.warn("createVoucherOrderPlus failed, will throw for batch recovery handoff, orderId={}, reconsumeTimes={}",
                         order.getId(), reconsumeTimes, e);
                 throw e;
             }
-            // ② 重试耗尽 → 直接在本地写 recovery_task 表，让 OrderCreateRecoveryJob 定时扫出来补单
-            log.error("createVoucherOrderPlus failed after MQ retries, create recovery task, orderId={}, reconsumeTimes={}",
+            // ② 已达重投阈值 → 说明监听器此前异常退出过（如恢复任务落库失败），这里直接落 recovery_task
+            log.error("createVoucherOrderPlus failed after redeliveries, create recovery task, orderId={}, reconsumeTimes={}",
                     order.getId(), reconsumeTimes, e);
             if (orderCreateRecoveryService != null) {
                 orderCreateRecoveryService.createRecoveryTask(orderMessage, sourceMessage, reconsumeTimes);
@@ -212,8 +219,12 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
      * 线程池拒绝策略为 {@link ThreadPoolExecutor.CallerRunsPolicy}，
      * 线程池满时让消费者线程自己跑任务，形成反压，防止秒杀洪峰打爆下游。
      *
-     * <p>单条消息处理失败只打日志，不返回 RECONSUME_LATER 让 RocketMQ 重试整批，
-     * 而是交给对账引擎（ReconcileScan）兜底补单，避免雪崩式重试。</p>
+     * <p><b>异常处理策略（刻意取舍，见 README 取舍 #2 / 面经 Q19 追问 1）</b>：
+     * 本监听器<b>始终返回 CONSUME_SUCCESS</b>，单条失败由下面的 catch 转为 recovery_task
+     * （OrderCreateRecoveryJob 按 10s 间隔重放），主动放弃 MQ 层自动重试——批量语义下
+     * 回抛 RECONSUME_LATER 会让整批 32 条重投，DB 故障时形成雪崩式重试。
+     * 唯一的例外：recovery_task 落库本身失败（如 DB 完全不可用）时异常会外抛，
+     * 触发 MQ 整批重投作为最后兜底。</p>
      *
      * @param consumer RocketMQ Push 消费者实例（连接 Broker 之前调用）
      */
@@ -236,7 +247,9 @@ public class SeckillPlusOrderListener implements RocketMQListener<String>, Rocke
                 try {
                     futures.get(i).get();
                 } catch (Exception e) {
-                    // 单条消息处理异常 → 生成恢复任务，让 OrderCreateRecoveryJob 定时兜底补单
+                    // 单条消息处理异常 → 生成恢复任务，让 OrderCreateRecoveryJob 定时兜底补单；
+                    // 注意：这里不要用 try-catch 吞掉 createRecoveryTask 的异常——落库失败时让它外抛，
+                    // 触发 MQ 整批重投，这是"恢复任务也写不进去"时的唯一兜底。
                     MessageExt failedMsg = msgs.get(i);
                     String body = new String(failedMsg.getBody(), StandardCharsets.UTF_8);
                     SeckillVoucherOrderMessage orderMessage = JSONUtil.toBean(body, SeckillVoucherOrderMessage.class);

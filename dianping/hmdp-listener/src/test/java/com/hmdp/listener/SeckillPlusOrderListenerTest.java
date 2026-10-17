@@ -81,7 +81,7 @@ class SeckillPlusOrderListenerTest {
     }
 
     @Test
-    void onMessage_shouldThrowWhenDbExceptionOccursBeforeMqRetryThreshold() {
+    void onMessage_shouldThrowWhenDbExceptionOccursBeforeRedeliveryThreshold() {
         IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
         OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
         SeckillPlusOrderListener listener = new SeckillPlusOrderListener(voucherOrderService, recoveryService, mock(RollbackFailureService.class), new MetricsRecorder(new SimpleMeterRegistry()));
