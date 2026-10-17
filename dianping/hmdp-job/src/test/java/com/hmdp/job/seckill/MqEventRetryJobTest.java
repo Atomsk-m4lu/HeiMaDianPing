@@ -14,8 +14,11 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -85,5 +88,36 @@ class MqEventRetryJobTest {
         verify(mapper).updateById(captor.capture());
         assertEquals("FAILED", captor.getValue().getEventStatus());
         assertEquals(5, captor.getValue().getRetryCount());
+    }
+
+    @Test
+    void run_shouldResendTimeoutEventWithDelayLevel() {
+        MqEventRetryJob job = new MqEventRetryJob();
+        ReflectionTestUtils.setField(job, "maxRetryCount", 5);
+        ReflectionTestUtils.setField(job, "metricsRecorder", new MetricsRecorder(new SimpleMeterRegistry()));
+        MqEventRecordMapper mapper = mock(MqEventRecordMapper.class);
+        RocketMqReliablePublisher publisher = mock(RocketMqReliablePublisher.class);
+        ReflectionTestUtils.setField(job, "mqEventRecordMapper", mapper);
+        ReflectionTestUtils.setField(job, "rocketMqReliablePublisher", publisher);
+
+        MqEventRecord row = new MqEventRecord()
+                .setId(2L)
+                .setEventType(RocketMqReliablePublisher.EVENT_SECKILL_ORDER_TIMEOUT)
+                .setDestination("seckill-plus-order-topic:order-timeout")
+                .setPayload("{}")
+                .setEventStatus("PENDING_RETRY")
+                .setRetryCount(0)
+                .setNextRetryTime(LocalDateTime.now());
+        when(mapper.selectList(any())).thenReturn(Collections.singletonList(row));
+        when(publisher.resendDelay(anyString(), anyString(), anyString(), anyInt())).thenReturn(true);
+
+        job.run();
+
+        verify(publisher).resendDelay(
+                eq(RocketMqReliablePublisher.EVENT_SECKILL_ORDER_TIMEOUT),
+                eq("seckill-plus-order-topic:order-timeout"),
+                eq("{}"),
+                eq(RocketMqReliablePublisher.ORDER_TIMEOUT_DELAY_LEVEL));
+        verify(publisher, never()).resend(anyString(), anyString(), anyString());
     }
 }

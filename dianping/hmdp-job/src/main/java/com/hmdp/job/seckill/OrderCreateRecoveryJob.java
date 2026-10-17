@@ -13,18 +13,17 @@ import javax.annotation.Resource;
  * <p>触发时机：
  * <pre>{@code
  *   用户秒杀下单 → 发 MQ → Listener 异步建单
- *                                    ↓ 失败
- *                            RocketMQ 自身重试（最多 16 次）
- *                                    ↓ 仍然失败
+ *                                    ↓ 失败（批量消费不依赖 MQ 重试，见 README 取舍 #2）
  *                            写入 order_create_recovery_task 表
  *                                    ↓
  *                            本 Job 每 5 秒捞取并自动恢复
+ *                            （每轮先回收卡在 PROCESSING 超过 5 分钟的任务）
  * }</pre></p>
  *
  * <p>与 {@link MqEventRetryJob} 的区别：
  * <ul>
  *   <li>MqEventRetryJob 是 <b>RocketMQ Broker 层面的重发</b>（消息没进到 Broker）</li>
- *   <li>本 Job 是 <b>业务层面的兜底</b>（消息进了 Broker 但消费端一直没处理成功，MQ 自身重试也耗尽了）</li>
+ *   <li>本 Job 是 <b>业务层面的兜底</b>（消息进了 Broker 但消费端处理失败，监听器转交 recovery_task）</li>
  * </ul></p>
  *
  * <p>恢复策略：Service 内部按 retryCount 判定是否继续自动重试，
@@ -33,6 +32,9 @@ import javax.annotation.Resource;
 @Slf4j
 @Component
 public class OrderCreateRecoveryJob {
+
+    /** 卡在 PROCESSING 超过该分钟数视为崩溃残留，重置回 PENDING 重新驱动 */
+    private static final int STUCK_PROCESSING_MINUTES = 5;
 
     /** 订单恢复服务 —— 扫描到期任务、自动重建订单、维护重试计数 */
     @Resource
@@ -58,6 +60,10 @@ public class OrderCreateRecoveryJob {
             return;
         }
         try {
+            int reset = orderCreateRecoveryService.resetStuckProcessingTasks(STUCK_PROCESSING_MINUTES);
+            if (reset > 0) {
+                log.warn("reset {} stuck PROCESSING recovery tasks", reset);
+            }
             orderCreateRecoveryService.processDueTasks();
         } catch (Exception e) {
             // Service 整体异常（如 DB 不可用），打 ERROR 日志等待下一轮重试

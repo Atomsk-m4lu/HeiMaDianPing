@@ -31,6 +31,11 @@ import java.time.LocalDateTime;
 @Slf4j
 public class RocketMqReliablePublisher {
 
+    /** 超时关单事件类型（VoucherOrderServiceImpl 发送、MqEventRetryJob 重发时共用） */
+    public static final String EVENT_SECKILL_ORDER_TIMEOUT = "SECKILL_ORDER_TIMEOUT";
+    /** 超时关单延时级别：RocketMQ 第 15 档 = 20 分钟（档位说明见 publishDelay） */
+    public static final int ORDER_TIMEOUT_DELAY_LEVEL = 15;
+
     private final RocketMQTemplate rocketMQTemplate;
     private final MqEventRecordMapper mqEventRecordMapper;
     private final MetricsRecorder metricsRecorder;
@@ -112,6 +117,21 @@ public class RocketMqReliablePublisher {
      * @return true=发送成功，false=发送失败已DB兜底
      */
     public boolean publishDelay(String eventType, String destination, String payload, int delayLevel) {
+        return doPublishDelay(eventType, destination, payload, delayLevel, true);
+    }
+
+    /**
+     * 延时消息重发（重试场景专用）：失败不重复落库，状态由原记录承载，
+     * 且必须保留 delayLevel —— 普通 syncSend 会立刻投递，丢掉延时语义。
+     *
+     * @return true=发送成功；false=发送失败且不落库
+     */
+    public boolean resendDelay(String eventType, String destination, String payload, int delayLevel) {
+        return doPublishDelay(eventType, destination, payload, delayLevel, false);
+    }
+
+    private boolean doPublishDelay(String eventType, String destination, String payload,
+                                   int delayLevel, boolean persistOnFailure) {
         try {
             rocketMQTemplate.syncSend(destination,
                     MessageBuilder.withPayload(payload)
@@ -119,8 +139,11 @@ public class RocketMqReliablePublisher {
                             .build());
             return true;
         } catch (Exception e) {
-            log.error("rocketmq delayed publish failed, destination={}, delayLevel={}", destination, delayLevel, e);
-            persistFailure(eventType, destination, payload, e);
+            log.error("rocketmq delayed publish failed, destination={}, delayLevel={}, persistOnFailure={}",
+                    destination, delayLevel, persistOnFailure, e);
+            if (persistOnFailure) {
+                persistFailure(eventType, destination, payload, e);
+            }
             return false;
         }
     }
@@ -129,7 +152,7 @@ public class RocketMqReliablePublisher {
      * 持久化发送失败的消息到DB — MqEventRetryJob 定时捞取重试。
      *
      * <p>初始重试时间设为30秒后，retryCount=0，
-     * 由 MqEventRetryJob 按指数退避策略逐步增加重试间隔。</p>
+     * 由 MqEventRetryJob 按固定 30 秒间隔重发（不做指数退避）。</p>
      */
     private void persistFailure(String eventType, String destination, String payload, Exception e) {
         metricsRecorder.incMqEventPersisted();

@@ -4,6 +4,7 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.dto.Result;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.SeckillVoucher;
+import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
@@ -18,6 +19,8 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -168,6 +171,45 @@ class VoucherOrderServiceImplTest {
 
         assertTrue(result.getSuccess());
         assertEquals(101L, result.getData());
+    }
+
+    @Test
+    void seckillVoucherPlus_shouldNotRollbackWhenPostPublishStepFails() {
+        VoucherOrderServiceImpl service = spy(new VoucherOrderServiceImpl());
+        StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+        RedisIdWorker redisIdWorker = mock(RedisIdWorker.class);
+        RocketMQTemplate rocketMQTemplate = mock(RocketMQTemplate.class);
+        RocketMqReliablePublisher reliablePublisher = mock(RocketMqReliablePublisher.class);
+        OrderCreateVerificationService verificationService = mock(OrderCreateVerificationService.class);
+        VoucherOrderMapper voucherOrderMapper = mock(VoucherOrderMapper.class);
+        ReflectionTestUtils.setField(service, "stringRedisTemplate", stringRedisTemplate);
+        ReflectionTestUtils.setField(service, "redisIdWorker", redisIdWorker);
+        ReflectionTestUtils.setField(service, "rocketMQTemplate", rocketMQTemplate);
+        ReflectionTestUtils.setField(service, "rocketMqReliablePublisher", reliablePublisher);
+        ReflectionTestUtils.setField(service, "orderCreateVerificationService", verificationService);
+        ReflectionTestUtils.setField(service, "baseMapper", voucherOrderMapper);
+
+        UserDTO user = new UserDTO();
+        user.setId(9L);
+        UserHolder.saveUser(user);
+        when(redisIdWorker.nextId("order")).thenReturn(101L);
+        when(stringRedisTemplate.execute(any(), eq(Collections.emptyList()), eq("7"), eq("9"), eq("101"),
+                eq("trace-101"), any(), any()))
+                .thenReturn(0L);
+        when(reliablePublisher.publish(eq("SECKILL_ORDER_CREATE"), eq("seckill-plus-order-topic:order-create"), any()))
+                .thenReturn(true);
+        when(reliablePublisher.publishDelay(eq("SECKILL_ORDER_TIMEOUT"), eq("seckill-plus-order-topic:order-timeout"), any(), eq(15)))
+                .thenReturn(true);
+        when(voucherOrderMapper.selectById(101L)).thenReturn(null);
+        doThrow(new RuntimeException("db timeout"))
+                .when(verificationService).createPendingTask(anyLong(), anyLong(), anyLong(), anyString());
+
+        Result result = service.seckillVoucherPlus(7L);
+
+        // 订单消息已发出 → 后续步骤失败也不回滚 Redis，用户照常拿到订单号
+        assertTrue(result.getSuccess());
+        assertEquals(101L, result.getData());
+        verify(service, never()).rollbackSeckillVoucherPlus(any());
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hmdp.entity.OrderCreateVerifyTask;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.entity.VoucherReconcileLog;
@@ -12,6 +13,7 @@ import com.hmdp.orderverify.model.OrderCreateVerifyStatus;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.shared.reconciliation.model.ReconcileLogType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -70,14 +72,17 @@ public class OrderCreateVerificationService {
     private final int retryDelaySeconds;
 
     /**
-     * Spring 推荐的构造器注入（简化版，恢复服务为 null，使用默认重试参数）
+     * Spring 自动装配构造器 —— 恢复服务用 {@link Lazy} 代理注入，打破
+     * VoucherOrderServiceImpl → VerificationService → RecoveryService → VoucherOrderServiceImpl 的循环依赖；
+     * 校验重试耗尽（FAILED）后会真正转交恢复服务补建订单。
      */
     @Autowired
     public OrderCreateVerificationService(OrderCreateVerifyTaskMapper taskMapper,
                                           VoucherOrderMapper voucherOrderMapper,
                                           VoucherReconcileLogMapper voucherReconcileLogMapper,
-                                          IVoucherOrderService voucherOrderService) {
-        this(taskMapper, voucherOrderMapper, voucherReconcileLogMapper, voucherOrderService, null, 5, 10);
+                                          IVoucherOrderService voucherOrderService,
+                                          @Lazy OrderCreateRecoveryService orderCreateRecoveryService) {
+        this(taskMapper, voucherOrderMapper, voucherReconcileLogMapper, voucherOrderService, orderCreateRecoveryService, 5, 10);
     }
 
     /**
@@ -151,6 +156,27 @@ public class OrderCreateVerificationService {
         for (OrderCreateVerifyTask task : tasks) {
             verifySingleTask(task);
         }
+    }
+
+    /**
+     * 回收卡在 VERIFYING 的任务 —— 进程在"标记 VERIFYING 之后、写回结果之前"崩溃/退出时，
+     * 任务会永久停在 VERIFYING（{@link #verifyDueTasks()} 只扫 PENDING/RETRYING），这里按超时重置回 PENDING。
+     * <p>阈值建议 5 分钟；校验本身只读查询，重复执行无副作用。</p>
+     *
+     * @param staleMinutes 超过多少分钟未更新的 VERIFYING 任务视为卡死
+     * @return 被重置的任务数
+     */
+    public int resetStuckVerifyingTasks(int staleMinutes) {
+        LocalDateTime now = LocalDateTime.now();
+        UpdateWrapper<OrderCreateVerifyTask> wrapper = new UpdateWrapper<>();
+        wrapper.eq("task_status", OrderCreateVerifyStatus.VERIFYING.name())
+                .lt("update_time", now.minusMinutes(staleMinutes))
+                .set("task_status", OrderCreateVerifyStatus.PENDING.name())
+                .set("next_check_time", now)
+                .set("last_message", "reset stuck VERIFYING task after " + staleMinutes + "min")
+                .set("updated_at", now)
+                .set("update_time", now);
+        return taskMapper.update(null, wrapper);
     }
 
     /**

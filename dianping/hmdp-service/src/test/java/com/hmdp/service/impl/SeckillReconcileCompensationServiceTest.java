@@ -63,6 +63,8 @@ class SeckillReconcileCompensationServiceTest {
         when(logMapper.selectOne(any()))
                 .thenReturn(new VoucherReconcileLog().setTraceId("trace-101").setLogType(ReconcileLogType.DEDUCT))
                 .thenReturn(null);
+        // CAS 抢占成功
+        when(taskMapper.update(any(), any())).thenReturn(1);
 
         service.processDueTasks();
 
@@ -92,10 +94,35 @@ class SeckillReconcileCompensationServiceTest {
         );
         when(taskMapper.selectList(any())).thenReturn(Collections.singletonList(task));
         when(orderMapper.selectById(101L)).thenReturn(new VoucherOrder().setId(101L));
+        // CAS 抢占成功
+        when(taskMapper.update(any(), any())).thenReturn(1);
 
         service.processDueTasks();
 
         assertEquals(SeckillReconcileTaskStatus.RESOLVED.name(), task.getTaskStatus());
         verify(voucherOrderService, never()).rollbackSeckillVoucherPlus(any(VoucherOrder.class));
+    }
+
+    @Test
+    void processDueTasks_shouldSkipWhenClaimFails() {
+        SeckillReconcileTaskMapper taskMapper = mock(SeckillReconcileTaskMapper.class);
+        VoucherOrderMapper orderMapper = mock(VoucherOrderMapper.class);
+        VoucherReconcileLogMapper logMapper = mock(VoucherReconcileLogMapper.class);
+        IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
+        SeckillReconcileCompensationService service =
+                new SeckillReconcileCompensationService(taskMapper, orderMapper, logMapper, voucherOrderService, true, 20, 5);
+
+        SeckillReconcileTask task = SeckillReconcileTask.pendingCompensation(
+                SeckillReconcileAnomalyType.DEDUCT_PRESENT_ORDER_MISSING,
+                101L, 11L, 21L, "trace-101", "deduct exists but order missing", 5);
+        when(taskMapper.selectList(any())).thenReturn(Collections.singletonList(task));
+        // CAS 抢占失败（已被其他实例/上一轮处理）→ 不执行预检查、不回滚
+        when(taskMapper.update(any(), any())).thenReturn(0);
+
+        service.processDueTasks();
+
+        verify(orderMapper, never()).selectById(any());
+        verify(voucherOrderService, never()).rollbackSeckillVoucherPlus(any(VoucherOrder.class));
+        verify(taskMapper, never()).updateById(any(SeckillReconcileTask.class));
     }
 }

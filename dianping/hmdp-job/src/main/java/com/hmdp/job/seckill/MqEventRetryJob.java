@@ -85,12 +85,24 @@ public class MqEventRetryJob {
         List<MqEventRecord> records = mqEventRecordMapper.selectList(wrapper);
         for (MqEventRecord record : records) {
             try {
-                // 尝试重新发送消息（resend：失败不重复落库，状态由本条记录承载，避免重试风暴放大表体积）
-                boolean success = rocketMqReliablePublisher.resend(
-                        record.getEventType(),
-                        record.getDestination(),
-                        record.getPayload()
-                );
+                // 尝试重新发送消息（resend：失败不重复落库，状态由本条记录承载，避免重试风暴放大表体积）。
+                // 超时关单消息必须保档重发：普通 syncSend 会立刻投递，丢掉 20 分钟延时语义；
+                // 其余事件仍走普通重发。
+                boolean success;
+                if (RocketMqReliablePublisher.EVENT_SECKILL_ORDER_TIMEOUT.equals(record.getEventType())) {
+                    success = rocketMqReliablePublisher.resendDelay(
+                            record.getEventType(),
+                            record.getDestination(),
+                            record.getPayload(),
+                            RocketMqReliablePublisher.ORDER_TIMEOUT_DELAY_LEVEL
+                    );
+                } else {
+                    success = rocketMqReliablePublisher.resend(
+                            record.getEventType(),
+                            record.getDestination(),
+                            record.getPayload()
+                    );
+                }
                 if (success) {
                     // 重试发送成功 → 标记为已发送，不再被后续 Job 扫描到
                     record.setEventStatus("SENT");

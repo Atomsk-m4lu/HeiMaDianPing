@@ -2,6 +2,7 @@ package com.hmdp.service.impl;
 
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hmdp.dto.SeckillVoucherOrderMessage;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.entity.OrderCreateRecoveryTask;
@@ -147,6 +148,32 @@ public class OrderCreateRecoveryService {
         for (OrderCreateRecoveryTask task : tasks) {
             processSingleTask(task);
         }
+    }
+
+    /**
+     * 回收卡在 PROCESSING 的任务 —— 进程在"标记 PROCESSING 之后、写回结果之前"崩溃/退出时，
+     * 任务会永久停在 PROCESSING（{@link #processDueTasks()} 只扫 PENDING/RETRYING），这里按超时重置回 PENDING。
+     * <p>阈值建议 5 分钟：正常单条恢复在秒级完成，5 分钟足以排除慢事务误伤；重置后由下一轮 Job 重新驱动。
+     * 重复处理是安全的（建单靠主键/唯一键幂等）。</p>
+     *
+     * @param staleMinutes 超过多少分钟未更新的 PROCESSING 任务视为卡死
+     * @return 被重置的任务数
+     */
+    public int resetStuckProcessingTasks(int staleMinutes) {
+        LocalDateTime now = LocalDateTime.now();
+        UpdateWrapper<OrderCreateRecoveryTask> wrapper = new UpdateWrapper<>();
+        wrapper.eq("task_status", OrderCreateRecoveryStatus.PROCESSING.name())
+                .lt("update_time", now.minusMinutes(staleMinutes))
+                .set("task_status", OrderCreateRecoveryStatus.PENDING.name())
+                .set("next_execute_time", now)
+                .set("last_message", "reset stuck PROCESSING task after " + staleMinutes + "min")
+                .set("updated_at", now)
+                .set("update_time", now);
+        int updated = taskMapper.update(null, wrapper);
+        if (updated > 0) {
+            log.warn("reset {} stuck recovery tasks (PROCESSING > {}min)", updated, staleMinutes);
+        }
+        return updated;
     }
 
     /**

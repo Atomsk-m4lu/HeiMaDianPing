@@ -1,6 +1,7 @@
 package com.hmdp.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hmdp.entity.SeckillReconcileTask;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.entity.VoucherReconcileLog;
@@ -12,6 +13,7 @@ import com.hmdp.shared.reconciliation.model.ReconcileLogType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileAnomalyType;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileCompensationStatus;
 import com.hmdp.shared.reconciliation.model.SeckillReconcileTaskStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,8 +22,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 // TODO 这段代码废弃掉
+@Slf4j
 @Service
 public class SeckillReconcileCompensationService {
+
+    /** 卡在 PROCESSING 超过该分钟数视为崩溃残留（补偿有副作用，阈值必须远大于正常耗时） */
+    private static final int STUCK_PROCESSING_MINUTES = 5;
 
     private final SeckillReconcileTaskMapper taskMapper;
     private final VoucherOrderMapper voucherOrderMapper;
@@ -68,9 +74,12 @@ public class SeckillReconcileCompensationService {
         if (!autoCompensationEnabled) {
             return;
         }
+        // 先回收崩溃残留：CAS 抢占只认 PENDING，PROCESSING 残留在不回收的情况下永远无人处理
+        resetStuckProcessingTasks(STUCK_PROCESSING_MINUTES);
         QueryWrapper<SeckillReconcileTask> wrapper = new QueryWrapper<>();
-        // 三条件联合筛选：只捞"等补偿 + 已到期 + 限量"的 task
+        // 四条件联合筛选：只捞"等补偿 + 未抢占 + 已到期 + 限量"的 task
         wrapper.eq("compensation_status", SeckillReconcileCompensationStatus.WAITING.name())
+                .eq("task_status", SeckillReconcileTaskStatus.PENDING.name())
                 .le("next_execute_time", LocalDateTime.now())
                 .last("limit " + batchSize);
         List<SeckillReconcileTask> tasks = taskMapper.selectList(wrapper);
@@ -93,9 +102,11 @@ public class SeckillReconcileCompensationService {
      * </pre>
      */
     void processSingleTask(SeckillReconcileTask task) {
-        // 和 Verification 的 markVerifying 同构：先抢状态 → taskStatus 变成 PROCESSING，
-        // 从 WAITING 集合里剔除，避免多节点 Job 重复处理同一条（无锁抢占）
-        markProcessing(task);
+        // CAS 抢占：只有把 task_status 从 PENDING 原子改成 PROCESSING 的线程才能继续。
+        // 补偿是回滚库存的破坏性动作，抢占失败（已被其他实例/上一轮处理）必须直接跳过，避免重复回补。
+        if (!markProcessing(task)) {
+            return;
+        }
 
         // 🔒 第一道门槛：再校一次 anomalyType —— 理论上 createTaskIfAbsent 已经过滤过，
         // 这里是"执行前最后一道保险"，防止代码改动或 task 被外部篡改后误补偿其他类型异常
@@ -152,11 +163,58 @@ public class SeckillReconcileCompensationService {
         taskMapper.updateById(task);
     }
 
-    private void markProcessing(SeckillReconcileTask task) {
+    /**
+     * CAS 抢占 —— 只有把 task_status 从 PENDING 原子地改成 PROCESSING 的线程才能执行补偿。
+     * <p>返回 false 表示已被其他实例/上一轮抢占（或状态已变），本线程直接跳过；
+     * 这是补偿动作（回滚库存）防重复执行的关键闸门。</p>
+     *
+     * @return true=抢占成功，可以执行补偿；false=未抢到，直接跳过
+     */
+    private boolean markProcessing(SeckillReconcileTask task) {
+        LocalDateTime now = LocalDateTime.now();
+        UpdateWrapper<SeckillReconcileTask> wrapper = new UpdateWrapper<>();
+        wrapper.eq("id", task.getId())
+                .eq("task_status", SeckillReconcileTaskStatus.PENDING.name())
+                .eq("compensation_status", SeckillReconcileCompensationStatus.WAITING.name())
+                .set("task_status", SeckillReconcileTaskStatus.PROCESSING.name())
+                .set("last_execute_time", now)
+                .set("updated_at", now)
+                .set("update_time", now);
+        int claimed = taskMapper.update(null, wrapper);
+        if (claimed == 0) {
+            return false;
+        }
         task.setTaskStatus(SeckillReconcileTaskStatus.PROCESSING.name());
-        task.setLastExecuteTime(LocalDateTime.now());
-        touch(task);
-        taskMapper.updateById(task);
+        task.setLastExecuteTime(now);
+        task.setUpdatedAt(now);
+        task.setUpdateTime(now);
+        return true;
+    }
+
+    /**
+     * 回收卡在 PROCESSING 的补偿任务 —— 进程崩溃/退出会留下 PROCESSING 残留，
+     * 而 CAS 抢占只认 PENDING，不回收就永远没人能再处理。按超时重置回 PENDING 后由下一轮 Job 重新抢占。
+     * <p>补偿是有副作用的动作（回滚库存），所以回收阈值远大于正常执行耗时（默认 5 分钟），
+     * 且执行前仍保留订单存在性、DEDUCT/RESTORE 日志三道预检查，重复执行会被前置校验拦下。</p>
+     *
+     * @param staleMinutes 超过多少分钟未更新的 PROCESSING 任务视为崩溃残留
+     * @return 被重置的任务数
+     */
+    public int resetStuckProcessingTasks(int staleMinutes) {
+        LocalDateTime now = LocalDateTime.now();
+        UpdateWrapper<SeckillReconcileTask> wrapper = new UpdateWrapper<>();
+        wrapper.eq("task_status", SeckillReconcileTaskStatus.PROCESSING.name())
+                .eq("compensation_status", SeckillReconcileCompensationStatus.WAITING.name())
+                .lt("update_time", now.minusMinutes(staleMinutes))
+                .set("task_status", SeckillReconcileTaskStatus.PENDING.name())
+                .set("next_execute_time", now)
+                .set("updated_at", now)
+                .set("update_time", now);
+        int reset = taskMapper.update(null, wrapper);
+        if (reset > 0) {
+            log.warn("reset {} stuck PROCESSING compensation tasks (> {}min)", reset, staleMinutes);
+        }
+        return reset;
     }
 
     private void resolveWithoutRollback(SeckillReconcileTask task, String detail) {

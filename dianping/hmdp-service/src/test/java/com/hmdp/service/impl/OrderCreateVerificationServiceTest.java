@@ -64,4 +64,25 @@ class OrderCreateVerificationServiceTest {
         verify(voucherOrderService, never()).rollbackSeckillVoucherPlus(any(VoucherOrder.class));
         verify(recoveryService).createRecoveryTask(any(), any(), anyInt());
     }
+
+    @Test
+    void autowiredConstructor_shouldHandOffToRecoveryWhenRetryExhausted() {
+        OrderCreateVerifyTaskMapper taskMapper = mock(OrderCreateVerifyTaskMapper.class);
+        VoucherOrderMapper orderMapper = mock(VoucherOrderMapper.class);
+        VoucherReconcileLogMapper logMapper = mock(VoucherReconcileLogMapper.class);
+        IVoucherOrderService voucherOrderService = mock(IVoucherOrderService.class);
+        OrderCreateRecoveryService recoveryService = mock(OrderCreateRecoveryService.class);
+        // 生产用的 5 参构造器（@Autowired）：修复前这里 recoveryService 固定传 null，接力会断
+        OrderCreateVerificationService service =
+                new OrderCreateVerificationService(taskMapper, orderMapper, logMapper, voucherOrderService, recoveryService);
+        OrderCreateVerifyTask task = OrderCreateVerifyTask.pending("verify-order-101", 101L, 11L, 21L, "trace-101", 0);
+        when(taskMapper.selectList(any())).thenReturn(Collections.singletonList(task));
+        when(orderMapper.selectById(101L)).thenReturn(null);
+        when(logMapper.selectOne(any())).thenReturn(null);
+
+        service.verifyDueTasks();
+
+        assertEquals(OrderCreateVerifyStatus.FAILED.name(), task.getTaskStatus());
+        verify(recoveryService).createRecoveryTask(any(), any(), anyInt());
+    }
 }

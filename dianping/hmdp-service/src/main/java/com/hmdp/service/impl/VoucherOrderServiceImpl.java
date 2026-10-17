@@ -261,71 +261,94 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         order.setVoucherId(voucherId);
         order.setTraceId(traceId);
 
+        // ========== 1) 构造消息（失败时尚未发出任何消息，可以安全回滚 Redis） ==========
+        SeckillVoucherOrderMessage message;
+        String payload;
         try {
-            SeckillVoucherOrderMessage message = buildOrderMessage(order);
-            String payload = JSONUtil.toJsonStr(message);
+            message = buildOrderMessage(order);
+            payload = JSONUtil.toJsonStr(message);
+        } catch (Exception e) {
+            log.error("build seckill plus order message failed, orderId={}", orderId, e);
+            rollbackAfterPublishFailure(order);
+            return Result.fail("下单人数过多，请重试");
+        }
 
-            // 2. 可靠MQ发送：成功则继续，失败时自动持久化到DB等待重试
-            boolean sent = rocketMqReliablePublisher.publish(
+        // ========== 2) 可靠MQ发送：失败时自动持久化到DB等待重试 ==========
+        boolean sent;
+        try {
+            sent = rocketMqReliablePublisher.publish(
                     "SECKILL_ORDER_CREATE",
                     SECKILL_PLUS_ORDER_DESTINATION,
                     payload
             );
-            if (!sent) {
-                // MQ发送失败 → 回滚Redis库存，用户可重试；回滚失败落库告警，不改变用户可重试语义
-                try {
-                    rollbackSeckillVoucherPlus(order);
-                } catch (Exception rollbackEx) {
-                    rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
-                            order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
-                }
-                return Result.fail("下单人数过多，请重试");
-            }
+        } catch (Exception e) {
+            // publish 内部落库兜底也失败（如 DB 不可用）：消息未确认发出，回滚 Redis
+            log.error("publish seckill plus order message failed, orderId={}", orderId, e);
+            rollbackAfterPublishFailure(order);
+            return Result.fail("下单人数过多，请重试");
+        }
+        if (!sent) {
+            // MQ发送失败 → 回滚Redis库存，用户可重试；回滚失败落库告警，不改变用户可重试语义
+            rollbackAfterPublishFailure(order);
+            return Result.fail("下单人数过多，请重试");
+        }
 
-            // 2. 等待异步建单落地（已注释，压测对比效果）
+        // ========== 3) 消息已发出：以下步骤 best-effort，任何失败都不再回滚 Redis ==========
+        // publish 成功 = 订单消息必然被消费（消费端幂等兜底）。此时若因后续步骤异常回滚 Redis，
+        // 会造成"用户被告知失败、订单却已建成" + Redis 库存虚高，所以这里只记录、不回滚。
+        // 2. 等待异步建单落地（已注释，压测对比效果）
 //             sleepForOrderConfirm();
-             // 登记订单创建校验任务（巡检兜底）
-             // ---------------------------------------------------------------------
-             // 主链路已注释掉 sleepForOrderConfirm() 同步等待（第285行），不阻塞用户响应；
-             // 这里登记一条 PENDING 任务交由 OrderCreateVerifyJob（每5秒）巡检：
-             //   DB有订单 + DB有DEDUCT日志 → SUCCESS（一致）
-             //   还没建好（MQ延迟/Lag）  → RETRYING，下次再查
-             //   重试耗尽              → FAILED → RecoveryService 主动补偿建单
-             //
-             // null 检查：@Autowired(required=false) — 对账兜底模块可整体关掉做压测对照；
-             // existsVoucherOrder 预查：本地Broker/极低延迟场景下MQ可能已消费完，
-             // 订单此时已落库，跳过登记 = 避免白白多一轮 Job 巡检 + DB 查询。
-             // ---------------------------------------------------------------------
-             if (orderCreateVerificationService != null && !existsVoucherOrder(orderId)) {
+        // 登记订单创建校验任务（巡检兜底）
+        // ---------------------------------------------------------------------
+        // 主链路已注释掉 sleepForOrderConfirm() 同步等待，不阻塞用户响应；
+        // 这里登记一条 PENDING 任务交由 OrderCreateVerifyJob（每5秒）巡检：
+        //   DB有订单 + DB有DEDUCT日志 → SUCCESS（一致）
+        //   还没建好（MQ延迟/Lag）  → RETRYING，下次再查
+        //   重试耗尽              → FAILED → RecoveryService 主动补偿建单
+        //
+        // null 检查：@Autowired(required=false) — 对账兜底模块可整体关掉做压测对照；
+        // existsVoucherOrder 预查：本地Broker/极低延迟场景下MQ可能已消费完，
+        // 订单此时已落库，跳过登记 = 避免白白多一轮 Job 巡检 + DB 查询。
+        // ---------------------------------------------------------------------
+        try {
+            if (orderCreateVerificationService != null && !existsVoucherOrder(orderId)) {
                 orderCreateVerificationService.createPendingTask(orderId, userId, voucherId, traceId);
-             }
+            }
+        } catch (Exception e) {
+            // 校验任务落库失败：订单消息已在途，不回滚；对账扫描兜底
+            log.warn("create order verify task failed, left to reconciliation, orderId={}", orderId, e);
+        }
 
-            // 3. 发送延时消息（delayLevel=15，实际 20 分钟）—— 比兜底Job的15分钟门槛晚，
-            //    正常情况兜底Job在16分钟左右先关单，延时消息只在兜底失效时生效，做最后备份。
-            //    选20min而不是更早的10min档(delayLevel=14)是因为：
-            //    RocketMQ没有精确15min的档位(只有14=10min, 15=20min)，早到的档会在Java层15min门槛
-            //    下全跳过(白跑)，反而变成冗余消费；选更晚的档让延时消息真正有意义。
+        // 3. 发送延时消息（delayLevel=15，实际 20 分钟）—— 比兜底Job的15分钟门槛晚，
+        //    正常情况兜底Job在16分钟左右先关单，延时消息只在兜底失效时生效，做最后备份。
+        //    选20min而不是更早的10min档(delayLevel=14)是因为：
+        //    RocketMQ没有精确15min的档位(只有14=10min, 15=20min)，早到的档会在Java层15min门槛
+        //    下全跳过(白跑)，反而变成冗余消费；选更晚的档让延时消息真正有意义。
+        try {
             rocketMqReliablePublisher.publishDelay(
-                    "SECKILL_ORDER_TIMEOUT",
+                    RocketMqReliablePublisher.EVENT_SECKILL_ORDER_TIMEOUT,
                     SECKILL_PLUS_TIMEOUT_DESTINATION,
                     payload,
-                    15
+                    RocketMqReliablePublisher.ORDER_TIMEOUT_DELAY_LEVEL
             );
-            return Result.ok(orderId);
         } catch (Exception e) {
-            // 兜底 catch：覆盖 buildOrderMessage 构造、JSON 序列化、甚至 publish 内部未捕获异常等所有意外。
-            // 注意：异常大概率发生在 Lua 脚本扣库存之后，此时 Redis 库存已减，必须回滚才能让用户重试
-            log.error("send seckill plus order message failed, orderId={}", orderId, e);
-            try {
-                // 还原 Redis 扣掉的库存，让用户可以重新发起秒杀
-                rollbackSeckillVoucherPlus(order);
-            } catch (Exception rollbackEx) {
-                // 回滚自己也炸了 —— 记下来等运维/对账任务捞，不能悄悄吞掉
-                rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
-                        order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
-            }
-            // 回滚成功或失败都返回同一个文案：用户侧感知一致（请重试），最终一致性靠补偿链路兜底
-            return Result.fail("下单人数过多，请重试");
+            // 延时消息失败：订单消息已发出，不回滚；正常关单还有 2 分钟兜底 Job
+            log.warn("publish timeout delay message failed, left to fallback job, orderId={}", orderId, e);
+        }
+        return Result.ok(orderId);
+    }
+
+    /**
+     * 发布失败路径的统一收口 —— 回滚 Redis 预扣，回滚再失败则落账本。
+     * <p>只在 order-create 消息确认未发出时调用；消息一旦确认发出，后续异常一律不回滚
+     * （见 {@link #seckillVoucherPlus} 步骤 3 的说明）。</p>
+     */
+    private void rollbackAfterPublishFailure(VoucherOrder order) {
+        try {
+            rollbackSeckillVoucherPlus(order);
+        } catch (Exception rollbackEx) {
+            rollbackFailureService.record(RollbackFailureService.SOURCE_MAIN_CHAIN,
+                    order, "REDIS_EXECUTE_ERROR", 1, rollbackEx);
         }
     }
 
